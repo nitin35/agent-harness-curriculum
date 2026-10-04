@@ -42,7 +42,7 @@ Day 13 builds the real harness's abort on exactly this.
 
 So a callback can only run once the code before it has finished. Watch what a busy loop does to a timer that should fire at once:
 
-```js
+```js run
 const start = Date.now();
 setTimeout(() => console.log(`timer fired after ${Date.now() - start} ms`), 0);
 
@@ -75,7 +75,7 @@ That's why Day 1's toy couldn't handle Ctrl+C. Readline reports Ctrl+C by callin
 
 Microtasks always jump the queue. Here is one of each, numbered in the order they print:
 
-```js
+```js run
 console.log('1 stack');
 setTimeout(() => console.log('5 macrotask: timer'), 0);
 Promise.resolve().then(() => console.log('3 microtask: promise'));
@@ -106,7 +106,7 @@ C++ contrast: there are no threads to start and no locks to take. Two callbacks 
 
 You can make a promise yourself with `new Promise`. The function you pass to it receives two functions: call `resolve(value)` to fulfil the promise, or `reject(error)` to reject it. This one fulfils after a delay (you'll write it yourself in 3.2):
 
-```js
+```js run
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const p = delay(10);
@@ -183,7 +183,7 @@ Day 5 covers errors properly: `try/catch/finally`, error classes and `cause`.
 
 **A promise can't be cancelled from outside.** Once `fetch` has started, the promise it returned has no "stop" button. So JavaScript has a separate, standard way to ask work to stop. An **`AbortController`** is the stop button, and its **`signal`** is the wire you hand to the work. Whoever holds the controller can press the button, and everyone holding the signal hears it:
 
-```js
+```js run
 const controller = new AbortController();
 const { signal } = controller;
 
@@ -294,7 +294,7 @@ Run one snippet at a time, with the others commented out. Snippets in the same f
 1. Write `delay(ms)` as `new Promise((resolve) => setTimeout(resolve, ms))`.
 2. Turn a nested-`setTimeout` "callback pyramid" into `.then` chains, then into `async/await`. Start from this one, which prints three lines 100 ms apart:
 
-   ```js
+   ```js run
    setTimeout(() => {
      console.log('one');
      setTimeout(() => {

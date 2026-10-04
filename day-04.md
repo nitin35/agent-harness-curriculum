@@ -25,7 +25,7 @@ This is a heavier day, with three new ideas that build on each other. Generators
 
 **An iterator hands out values one at a time.** It is an object with a `next()` method, and each call returns `{ value, done }`. An *iterable* is anything that can give you an iterator, through a method stored under the special key `Symbol.iterator`. Arrays, strings, `Map`s and `Set`s are all iterable, which is why `for...of` (Day 2) works on them. This is what `for...of` does behind the scenes:
 
-```js
+```js run
 const it = ['a', 'b'][Symbol.iterator]();
 it.next()             // → { value: 'a', done: false }
 it.next()             // → { value: 'b', done: false }
@@ -36,7 +36,7 @@ it.next()             // → { value: undefined, done: true }
 
 **A generator writes an iterator for you.** A function declared with `function*` doesn't run its body when you call it. It returns a *generator object*. The body runs only when someone asks for the next value, and it pauses at each `yield`:
 
-```js
+```js run
 function* count() {
   console.log('starting');
   yield 1;
@@ -79,7 +79,7 @@ Check the count before asking for the next value. If you check after, `take(3, s
 
 **Stopping early runs the generator's cleanup.** When a `for...of` loop ends early (a `break`, a `return` or an exception), it calls the generator's `return()` method. The generator stops where it paused, and its `finally` blocks run:
 
-```js
+```js run
 function* lines() {
   try {
     yield 'first';
@@ -105,7 +105,7 @@ Python contrast: this is nearly identical to Python generators, down to `yield`,
 
 **An async generator yields values over time.** An `async function*` can `await` inside its body and `yield` values as they become ready. Each `next()` call returns a promise, and `for await...of` awaits each one for you:
 
-```js
+```js run
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function* countdown(from) {
@@ -208,7 +208,7 @@ JSON.parse('{"n"')
 
 The rule: **decode incrementally, keep the partial line in a buffer, and `JSON.parse` complete lines only.** Splitting on `'\n'` does most of the work. Every piece except the last is a complete line. The last piece is whatever came after the final newline: the start of a line that hasn't finished arriving, or `''` if the chunk ended exactly on a newline:
 
-```js
+```js run
 '{"n":1}\n{"n"'.split('\n')      // → ['{"n":1}', '{"n"']   the last piece is a partial line
 '{"n":1}\n'.split('\n')          // → ['{"n":1}', '']        the chunk ended on a newline
 ```

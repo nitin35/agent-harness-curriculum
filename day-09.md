@@ -129,7 +129,7 @@ Python contrast: this is what the `jsonschema` package, or a pydantic model, doe
 
 **A plain object comes with keys you didn't put there.** Every object inherits properties from `Object.prototype`, so an empty object already "has" a `toString`, and one special key doesn't store anything at all:
 
-```js
+```js run
 const tools = {};
 'toString' in tools                       // → true: inherited, not registered
 tools.toString                            // → [Function: toString]
@@ -141,7 +141,7 @@ tools.name                                // → '__proto__': the object's proto
 
 A tool named `toString` or `__proto__` is a real possibility. A `Map` has no prototype-key traps, a real `.size`, and insertion order:
 
-```js
+```js run
 const registry = new Map();
 registry.has('toString')                  // → false
 registry.set('__proto__', { name: '__proto__' });
@@ -152,7 +152,7 @@ registry.size                             // → 1: stored like any other key
 
 **But the wire is JSON.** `toProviderTools()` returns plain objects with `execute`, `needsApproval` and `readOnly` stripped. (`JSON.stringify` silently *omits* function-valued properties, so a leak wouldn't even show up as an error.) Policy fields are worse, because they're data:
 
-```js
+```js run
 JSON.stringify({ name: 'lookup', execute() {}, needsApproval: true })
 // → '{"name":"lookup","needsApproval":true}'      the function vanished; the policy flag went out
 ```

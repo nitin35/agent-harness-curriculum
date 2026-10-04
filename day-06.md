@@ -158,7 +158,7 @@ With the first, a listener that saves the session to disk is guaranteed to finis
 
 Day 3's toy kept a smaller version of this in one variable: `controller` was `null` at the prompt and set while a run was in flight. Written as data, a state machine becomes a lookup table, and an illegal transition is a missing entry:
 
-```js
+```js run
 const REPL = Object.freeze({
   AtPrompt: { line: 'Running', ctrl_c: 'Exited' },
   Running: { ctrl_c: 'Aborting', run_end: 'AtPrompt' },

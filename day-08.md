@@ -168,7 +168,7 @@ http             Ollama answered HTTP 500: {"error":"llama runner process has te
 
 **Read the model's maximum from `/api/show`.** `POST /api/show` returns `model_info` with a key ending in `.context_length`. Its prefix depends on the model family (`qwen35.`, `llama.`, `gemma3.`), so **match by suffix**:
 
-```js
+```js run
 const info = { 'general.architecture': 'qwen35', 'qwen35.context_length': 262144 };   // from /api/show
 const key = Object.keys(info).find((k) => k.endsWith('.context_length'));
 key                                     // → 'qwen35.context_length'

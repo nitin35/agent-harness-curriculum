@@ -79,7 +79,7 @@ The *By tonight* row for `quote-line` is the same arithmetic: 2 passes in 3 tria
 
 **Compute C(n, k) as a product, never with factorials.** JavaScript numbers are 64-bit floats, and factorials outgrow them fast. `170!` is about `7.26e306`, `171!` is `Infinity`, and a ratio of two infinities is `NaN`:
 
-```js
+```js run
 const fact = (n) => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; };
 fact(171)                            // → Infinity
 fact(200) / (fact(3) * fact(197))    // → NaN: Infinity / Infinity
