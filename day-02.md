@@ -31,7 +31,7 @@ These ideas are the backbone of the rest of the course. Misunderstanding them ra
 
 **Seven primitive types, and everything else is an object.** A *primitive* is a simple value that can't be changed: `string`, `number`, `bigint`, `boolean`, `undefined`, `symbol` and `null`. Everything else (plain objects, arrays, functions, dates, errors) is an *object*. The `typeof` operator tells you which kind of value you have:
 
-```js
+```js run
 typeof 'hello'        // → 'string'
 typeof 42             // → 'number'
 typeof true           // → 'boolean'
@@ -48,14 +48,14 @@ It has two quirks. `typeof null` is `'object'`, a bug from 1995 that can never b
 
 The difference matters for the harness, because messages travel as JSON, and JSON has `null` but no `undefined`. `JSON.stringify` silently drops every property whose value is `undefined`:
 
-```js
+```js run
 JSON.stringify({ content: 'Hi', thinking: undefined, images: null })
 // → '{"content":"Hi","images":null}'      thinking is gone; images survived as null
 ```
 
 **One number type.** `number` is a 64-bit floating-point value (a C++ `double`), and JavaScript uses it for integers too:
 
-```js
+```js run
 7 / 2                 // → 3.5        no integer division; use Math.trunc(7 / 2) → 3
 0.1 + 0.2             // → 0.30000000000000004
 1 / 0                 // → Infinity   no exception
@@ -70,7 +70,7 @@ C++ contrast: there's no `int` overflow, no integer division, and dividing by ze
 
 **Truthiness: what counts as false.** Conditions (`if (x)`, `!x`, `x && y`, `x || y`) treat any value as true or false. Exactly eight values are **falsy**: `false`, `0`, `-0`, `0n`, `''` (the empty string), `null`, `undefined` and `NaN`. Everything else is **truthy**. That includes every object and every non-empty string, which catches Python programmers out:
 
-```js
+```js run
 const toolCalls = [];
 if (toolCalls) console.log('has tool calls');          // prints! An empty array is an object: truthy
 if (toolCalls.length) console.log('has tool calls');   // correct: 0 is falsy
@@ -89,7 +89,7 @@ So convert such values on purpose before you test them (see *Converting on purpo
 
 **Equality: always use `===`.** `===` (*strict* equality) never converts: values of different types are simply not equal. `==` (*loose* equality) first converts both sides using rules so tangled that they aren't even consistent:
 
-```js
+```js run
 '' == 0               // → true
 '0' == 0              // → true
 '' == '0'             // → false   two things equal to 0 aren't equal to each other
@@ -101,7 +101,7 @@ Use `===` and `!==` everywhere. JavaScript's `===` behaves like Python's `==` do
 
 **Objects compare by identity.** For primitives, `===` compares values. For objects and arrays, it asks *"is this the very same object?"*, like comparing two pointers in C++ or using `is` in Python:
 
-```js
+```js run
 const a = { role: 'user' };
 const b = { role: 'user' };
 a === b               // → false   two different objects that happen to look alike
@@ -112,14 +112,14 @@ To compare contents, compare the fields you care about. In tests, `assert.deepSt
 
 **Converting on purpose.** Arithmetic converts its operands too, and `+` is the odd one out: if either side is a string, `+` joins strings. The other arithmetic operators turn both sides into numbers:
 
-```js
+```js run
 '3' + 1               // → '31'
 '3' - 1               // → 2
 ```
 
 Don't rely on either. Convert explicitly, and check that the conversion worked:
 
-```js
+```js run
 Number('8192')        // → 8192
 Number('8k')          // → NaN      the whole string must be a number
 Number('')            // → 0        careful: an empty string becomes 0
@@ -133,7 +133,7 @@ Day 5's flag parser does exactly this with `--num-ctx`: `Number(…)`, then a ch
 
 **Objects are bags of named properties.** You've used them since Day 1: every message in the history is one.
 
-```js
+```js run
 const msg = { role: 'user', content: 'How many files?' };
 msg.role              // → 'user'
 msg['content']        // → 'How many files?'   brackets accept any expression, such as a variable
@@ -146,7 +146,7 @@ const opts = { model, numCtx: 8192 };          // shorthand for { model: model, 
 
 **Optional chaining, `?.`, for data that might not be there.** A model's reply is full of parts that are sometimes present and sometimes not. Ollama includes `tool_calls` only when the model calls a tool, so on a plain answer:
 
-```js
+```js run
 const reply = { role: 'assistant', content: 'Paris.' };
 reply.tool_calls.length     // TypeError: Cannot read properties of undefined (reading 'length')
 reply.tool_calls?.length    // → undefined
@@ -173,7 +173,7 @@ Use `??` for defaults. `numCtx || 8192` quietly turns a deliberate `0` into `819
 
 Most of the first family take a function, which they call once per item:
 
-```js
+```js run
 const calls = [
   { name: 'bash', args: { command: 'ls' } },
   { name: 'read', args: { path: 'notes.txt' } },
@@ -189,7 +189,7 @@ calls.at(-1).args.command                       // → 'pwd'   a negative index 
 
 `sort` has two traps: it changes the array in place, and without a compare function it sorts items **as strings**:
 
-```js
+```js run
 const sizes = [10, 9, 1];
 sizes.sort()                       // → [1, 10, 9]   as text, '10' comes before '9'
 sizes.sort((a, b) => a - b)        // → [1, 9, 10]
@@ -198,14 +198,14 @@ sizes.toSorted((a, b) => b - a)    // → [10, 9, 1], and sizes itself is left a
 
 **Loop with `for...of`, not `for...in`.** `for (const x of list)` gives you the *values*, like Python's `for x in list`. `for...in` gives you the *keys*, as strings, which is almost never what you want for an array:
 
-```js
+```js run
 for (const name of ['bash', 'read']) console.log(name);       // bash, then read
 for (const i in ['bash', 'read']) console.log(i, typeof i);   // 0 string, then 1 string
 ```
 
 To walk an object's properties, ask for its entries:
 
-```js
+```js run
 const settings = { model: 'qwen3.5:4b', numCtx: 8192 };
 for (const [key, value] of Object.entries(settings)) {
   console.log(`${key} = ${value}`);                       // model = qwen3.5:4b, then numCtx = 8192
@@ -235,7 +235,7 @@ Arrow functions are shorter, and they treat `this` differently (below). One synt
 
 **Closures.** A function can use the variables around it, and it keeps them even after the code that created them has finished. That is a **closure**. A *factory function* uses closures to give an object private state:
 
-```js
+```js run
 function createCounter() {
   let n = 0;                                 // stays alive after createCounter returns
   return {
@@ -256,7 +256,7 @@ Nothing outside can read or change `n`, except through `next` and `peek`. The ha
 
 **A closure captures the variable itself, not a copy of its value.** If the variable changes later, the closure sees the change:
 
-```js
+```js run
 let model = 'qwen3.5:4b';
 const describe = () => `using ${model}`;
 model = 'qwen3.5:9b';
@@ -265,7 +265,7 @@ describe()            // → 'using qwen3.5:9b'   it reads model now, not when i
 
 In a loop, `let` creates a **fresh variable for every pass**, so closures made in different passes don't share one:
 
-```js
+```js run
 const fns = [];
 for (let i = 0; i < 3; i++) fns.push(() => i);
 fns.map((f) => f())   // → [0, 1, 2]
@@ -284,7 +284,7 @@ Python contrast: `[f() for f in [lambda: i for i in range(3)]]` gives `[2, 2, 2]
 
 *Run this in a file*, not the REPL:
 
-```js
+```js run
 const client = {
   model: 'qwen3.5:4b',
   label() { return this.model; },
@@ -310,7 +310,7 @@ setTimeout(() => client.label(), 0);
 
 **Arrow functions have no `this` of their own.** They use the `this` of the code they're written in, just like any other variable from the surrounding scope. That makes them the right choice for callbacks *inside* a method:
 
-```js
+```js run
 const tally = {
   total: 0,
   addAll(numbers) {
@@ -330,7 +330,7 @@ The same rule makes arrow functions the wrong choice *as* methods. An arrow writ
 
 There are two common ways to make objects that bundle state with behaviour. Here's the same small client written both ways:
 
-```js
+```js run
 class Client {
   #model;                                   // a private field: only code inside the class can use it
 
@@ -409,7 +409,7 @@ When every option is optional, give the whole object a default as well: `functio
 
 **Spread (`...`) copies the contents of one array or object into a new one.** For objects, a property written later wins, which makes spread the standard way to "change" one field without touching the original:
 
-```js
+```js run
 const msg = { role: 'assistant', content: 'Hello' };
 const edited = { ...msg, content: 'Hi' };     // → { role: 'assistant', content: 'Hi' }
 msg.content                                   // → 'Hello'   the original is untouched
@@ -420,7 +420,7 @@ const more = [...tools, 'bash'];              // → ['read', 'bash'], and tools
 
 **Spread is shallow.** It copies the top level only, so nested objects and arrays end up *shared* between the copy and the original:
 
-```js
+```js run
 const reply = { role: 'assistant', tool_calls: [{ id: 'call_1' }] };
 const copy = { ...reply, content: '' };
 copy.tool_calls.push({ id: 'call_2' });
@@ -431,7 +431,7 @@ reply.tool_calls.length                       // → 2   the original changed to
 
 **`const` is not immutability.** `const` stops you from pointing the *variable* at a different value. The object it points to can still change:
 
-```js
+```js run
 const msg = { content: 'a' };
 msg.content = 'b';    // allowed: the object changed, the variable didn't
 msg = {};             // TypeError: Assignment to constant variable.

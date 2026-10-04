@@ -28,6 +28,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run check:runnable # every ```js run block must run cleanly
       - run: npm run docs:build
       - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/configure-pages@v6

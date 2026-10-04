@@ -41,7 +41,7 @@ Two things.
 
 **The same tool pair, in this dialect.** Day 8's `toWireMessages` produced Ollama's shape. This provider's version turns the same two messages into:
 
-```js
+```js run
 [
   { role: 'assistant', content: '',
     tool_calls: [{ id: 'call_1', type: 'function',

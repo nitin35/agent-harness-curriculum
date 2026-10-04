@@ -154,7 +154,7 @@ Python contrast: `cause` is `raise … from err`, which sets `__cause__`.
 
 **`finally` always runs.** A `try` block runs your code. If something in it throws, `catch` receives the thrown value. `finally` runs last, *whatever happened*: after a normal finish, after a `return`, after a `throw` and after a `break`. Even a `return` inside `try` waits for it:
 
-```js
+```js run
 function demo() {
   try {
     console.log('working');

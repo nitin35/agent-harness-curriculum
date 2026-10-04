@@ -42,7 +42,7 @@ Ollama speaks its own dialect. Mapping between the two is the provider's job, an
 
 **Why translate at the edge?** If wire names leak into the loop, the session file and the UI, then each of them has to know every provider's dialect, and adding a provider means changing all of them. Worse, many differences fail silently. Ollama sends a tool call's arguments as an object, but OpenAI-style servers send them as a JSON *string*. Code written for one reads the other wrongly, with no error at all:
 
-```js
+```js run
 const args = '{"command":"ls"}';         // arguments, as an OpenAI-style server sends them
 args.command                             // → undefined: no error, just a missing command
 JSON.parse(args).command                 // → 'ls'

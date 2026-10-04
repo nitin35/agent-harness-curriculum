@@ -46,7 +46,7 @@ One line went in, and one line came back. The `ready` log went to stderr, and th
 
 **Rule 1: one message per line.** Each message is one JSON-RPC 2.0 object followed by `\n`, with no newlines inside it. `JSON.stringify` never produces a raw newline: a newline inside a string comes out as the two characters `\` and `n`.
 
-```js
+```js run
 const line = JSON.stringify({ text: 'line one\nline two' });
 line.includes('\n')   // → false
 console.log(line);    // {"text":"line one\nline two"}

@@ -88,7 +88,7 @@ Naming each key matters twice. An attack can't hide in silence, and you learn wh
 
 **Skip three dangerous keys.** Also skip `__proto__`, `constructor` and `prototype` keys while merging. Repo JSON must not pollute your objects. `JSON.parse` turns `"__proto__"` into an ordinary key, and a naive merge then writes through it into `Object.prototype`, which every object in the process inherits from. *Run this in a file*, in a process of its own:
 
-```js
+```js run
 const repo = JSON.parse('{"__proto__": {"polluted": true}}');
 Object.keys(repo)                  // → ['__proto__']: an ordinary key after JSON.parse
 
