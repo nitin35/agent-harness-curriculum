@@ -64,20 +64,25 @@ You will finish at an intermediate level in JavaScript and harness engineering, 
 ## The 30-day plan
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph W1 [Week 1 — Hello, agent: JavaScript through a toy]
+    direction LR
     D1[1 Toy agent] --> D2[2 JS core] --> D3[3 Async + abort] --> D4[4 Streams + bytes] --> D5[5 Errors + tests] --> D6[6 Read Pi, design]
   end
   subgraph W2 [Week 2 — Provider & tools]
+    direction LR
     D7[7 Wire formats] --> D8[8 Provider] --> D9[9 Registry] --> D10[10 Jail read write] --> D11[11 bash edit] --> D12[12 Loop] --> D13[13 Abort e2e ✓1]
   end
   subgraph W3 [Week 3 — Interactive harness]
+    direction LR
     D14[14 Events] --> D15[15 Prompt + bridge] --> D16[16 Streaming ✓2] --> D17[17 Sessions] --> D18[18 Commands] --> D19[19 Resume]
   end
   subgraph W4 [Week 4 — Power & context]
+    direction LR
     D20[20 Permissions] --> D21[21 2nd provider] --> D22[22 Extensions] --> D23[23 MCP] --> D24[24 Context + skills] --> D25[25 Compaction ✓3]
   end
   subgraph W5 [Week 5 — Product & proof]
+    direction LR
     D26[26 CLI + settings] --> D27[27 Red team] --> D28[28 @file + integration] --> D29[29 Evals] --> D30[30 Ship]
   end
   W1 --> W2 --> B1([Buffer 1]) --> W3 --> W4 --> B2([Buffer 2]) --> W5
