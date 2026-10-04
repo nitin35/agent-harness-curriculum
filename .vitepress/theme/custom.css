@@ -1,0 +1,27 @@
+/* .vitepress/theme/custom.css — small adjustments for the course's Markdown. */
+
+/* Stuck? sections are many <details> blocks: give them a quiet frame so they read as a list of hints. */
+.vp-doc details {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin: 10px 0;
+}
+.vp-doc details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.vp-doc details[open] > summary {
+  margin-bottom: 8px;
+}
+
+/* Wide tables (the 30-day plan, attack maps) scroll instead of squeezing their columns. */
+.vp-doc table {
+  display: block;
+  overflow-x: auto;
+}
+
+/* Sidebar titles may contain `code`. */
+.VPSidebarItem .text code {
+  font-size: 0.9em;
+}
