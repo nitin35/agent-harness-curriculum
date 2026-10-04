@@ -1,0 +1,20 @@
+[
+ {
+  "content": "",
+  "toolCalls": [
+   {
+    "id": "c0",
+    "name": "bash",
+    "arguments": {
+     "command": "find src -type f | wc -l"
+    }
+   }
+  ],
+  "model": "scripted"
+ },
+ {
+  "content": "3",
+  "toolCalls": [],
+  "model": "scripted"
+ }
+]

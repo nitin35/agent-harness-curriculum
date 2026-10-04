@@ -1,0 +1,24 @@
+{
+  "models": [
+    {
+      "name": "qwen3.5:9b-mlx",
+      "model": "qwen3.5:9b-mlx",
+      "size": 8903014758
+    },
+    {
+      "name": "qwen3.5:4b",
+      "model": "qwen3.5:4b",
+      "size": 3389983735
+    },
+    {
+      "name": "gemma4:12b-mlx",
+      "model": "gemma4:12b-mlx",
+      "size": 6773358208
+    },
+    {
+      "name": "gemma4:e4b-mlx",
+      "model": "gemma4:e4b-mlx",
+      "size": 9639236355
+    }
+  ]
+}

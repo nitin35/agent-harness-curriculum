@@ -1,0 +1,22 @@
+[
+ {
+  "content": "",
+  "toolCalls": [
+   {
+    "id": "c0",
+    "name": "read",
+    "arguments": {
+     "path": "src/greet.js",
+     "offset": 3,
+     "limit": 1
+    }
+   }
+  ],
+  "model": "scripted"
+ },
+ {
+  "content": "  return `Hello, ${name}! Welcome aboard.`;",
+  "toolCalls": [],
+  "model": "scripted"
+ }
+]

@@ -1,0 +1,4 @@
+node_modules/
+.agent-harness/
+*.log
+.DS_Store

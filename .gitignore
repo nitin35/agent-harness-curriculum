@@ -1,0 +1,8 @@
+# OS and editor clutter
+.DS_Store
+*.log
+
+# Dependencies and build output
+node_modules/
+.vitepress/cache/
+.vitepress/dist/

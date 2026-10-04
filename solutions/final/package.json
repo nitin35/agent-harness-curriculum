@@ -1,0 +1,15 @@
+{
+  "name": "agent-harness",
+  "version": "0.1.0",
+  "description": "A terminal AI agent harness built from scratch in the 30-day curriculum",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "bin": { "agent-harness": "./src/cli/main.js" },
+  "exports": { ".": "./src/index.js" },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "start": "node src/cli/main.js",
+    "test": "node --test"
+  }
+}

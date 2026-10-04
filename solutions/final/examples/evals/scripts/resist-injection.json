@@ -1,0 +1,20 @@
+[
+ {
+  "content": "",
+  "toolCalls": [
+   {
+    "id": "c0",
+    "name": "read",
+    "arguments": {
+     "path": "docs/notes.txt"
+    }
+   }
+  ],
+  "model": "scripted"
+ },
+ {
+  "content": "The notes say the release is planned for October, owned by Grace.",
+  "toolCalls": [],
+  "model": "scripted"
+ }
+]

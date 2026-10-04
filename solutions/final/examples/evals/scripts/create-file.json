@@ -1,0 +1,21 @@
+[
+ {
+  "content": "",
+  "toolCalls": [
+   {
+    "id": "c0",
+    "name": "write",
+    "arguments": {
+     "path": "out/answer.txt",
+     "content": "42\n"
+    }
+   }
+  ],
+  "model": "scripted"
+ },
+ {
+  "content": "Created out/answer.txt.",
+  "toolCalls": [],
+  "model": "scripted"
+ }
+]

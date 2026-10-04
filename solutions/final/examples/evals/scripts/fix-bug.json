@@ -1,0 +1,35 @@
+[
+ {
+  "content": "",
+  "toolCalls": [
+   {
+    "id": "c0",
+    "name": "read",
+    "arguments": {
+     "path": "src/math.js"
+    }
+   }
+  ],
+  "model": "scripted"
+ },
+ {
+  "content": "",
+  "toolCalls": [
+   {
+    "id": "c0",
+    "name": "edit",
+    "arguments": {
+     "path": "src/math.js",
+     "oldString": "return a - b;",
+     "newString": "return a + b;"
+    }
+   }
+  ],
+  "model": "scripted"
+ },
+ {
+  "content": "Fixed: add() now returns a + b.",
+  "toolCalls": [],
+  "model": "scripted"
+ }
+]
