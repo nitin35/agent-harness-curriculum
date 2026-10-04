@@ -25,3 +25,35 @@
 .VPSidebarItem .text code {
   font-size: 0.9em;
 }
+
+/* Notes: the ✎ button beside each section heading (added by NotesLayer). Shown on hover, or always when
+   the section has a note; always faintly visible on touch screens, which have no hover. */
+.vp-doc .course-note-btn {
+  margin-left: 8px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vp-c-text-3);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.7;
+  vertical-align: middle;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.vp-doc h2:hover .course-note-btn,
+.vp-doc h3:hover .course-note-btn,
+.vp-doc .course-note-btn:focus-visible,
+.vp-doc .course-note-btn.has-note {
+  opacity: 1;
+}
+.vp-doc .course-note-btn.has-note {
+  border-color: var(--vp-c-brand-soft);
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+}
+@media (hover: none) {
+  .vp-doc .course-note-btn { opacity: 0.6; }
+}
