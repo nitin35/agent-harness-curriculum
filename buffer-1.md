@@ -2,9 +2,9 @@
 
 **When:** after Day 13 (Checkpoint 1)
 
-Two weeks in, most learners are behind somewhere, and that's normal. This day exists so that being behind doesn't snowball into Week 3, which assumes a working engine.
+Two weeks in, most learners are behind somewhere, and that's normal. The last few days were dense, with processes, signals, a loop and abort arriving one after another. This day exists so that being behind doesn't snowball into Week 3, which assumes a working engine. If you're not behind, it's a chance to make what you built your own.
 
-Start by finding out where you stand. Run `node --test` with Ollama stopped (the first item of Checkpoint 1, in Day 13.6). Then pick your section: if anything is red, section 1; if everything is green, section 2; if you've already done what section 2 suggests, section 3.
+Start by finding out where you stand, with evidence rather than a feeling. Run `node --test` with Ollama stopped (the first item of Checkpoint 1, in Day 13.6). Then pick your section: if anything is red, section 1; if everything is green, section 2; if you've already done what section 2 suggests, section 3.
 
 ## 1. Are you behind? Repair first
 
@@ -20,11 +20,13 @@ Work down this list and stop at the first red item. The order matters: later day
 
 The square brackets in those patterns are a shell feature: `[345]` matches one character that is `3`, `4` or `5`, so `day0[345]-*` picks up the test files for Days 3, 4 and 5, and `day1[01]-*` the ones for Days 10 and 11. The smoke check needs Ollama running; the others don't.
 
-**How to repair one red test.** Run only that day's tests. Read the *first* failure, not the last: the `+ actual` and `- expected` lines (Day 5) say what your code returned and what the test wanted. Then open that day's **Stuck?** section, where the common causes of each failure are written down. Most red tests on this list are one of a handful of mistakes: a missing `await`, a signal that isn't passed on, or a result that was thrown instead of returned.
+To repair one red test, run only that day's tests. Read the *first* failure, not the last: the `+ actual` and `- expected` lines (Day 5) say what your code returned and what the test wanted. Then open that day's **Stuck?** section, where the common causes of each failure are written down. Most red tests on this list are one of a handful of mistakes: a missing `await`, a signal that isn't passed on, or a result that was thrown instead of returned.
 
-**If a day is still red after a real attempt, it's OK to look at the solution.** A real attempt means you've read the first failure, checked the day's Stuck? section, and tried a fix. Then read *one file* from [`solutions/checkpoint-1/`](solutions/checkpoint-1/), close it, and write yours. If you're truly stuck, copying `solutions/checkpoint-1/src` wholesale is allowed: say so in your commit message (`buffer-1: adopted reference loop`) and keep going. Finishing beats stalling.
+If a day is still red after a real attempt, it's OK to look at the solution. A real attempt means you've read the first failure, checked the day's Stuck? section, and tried a fix. Then read *one file* from [`solutions/checkpoint-1/`](solutions/checkpoint-1/), close it, and write yours. If you're truly stuck, copying `solutions/checkpoint-1/src` wholesale is allowed: say so in your commit message (`buffer-1: adopted reference loop`) and keep going. Finishing beats stalling: a week 3 built on a working engine teaches you far more than a week spent stuck on Day 11.
 
 ## 2. On track? Consolidate (pick one or two)
+
+Everything is green, so the engine works. These options are about understanding *why* it works, which is what lets you change it confidently later.
 
 **Read your own code aloud.** Open `agent-loop.js` and explain each line in `notes/buffer-1.md` as if teaching it. Anything you can't explain is worth a test. Explaining a line means saying *why* it's there, not what it does. For example: "this check sits before the tool runs, so a call after an abort gets `Skipped: run aborted` instead of starting". The places most worth explaining are the abort paths, where each tool result is appended, and the fail-closed approval branch.
 
@@ -44,6 +46,8 @@ npx tsc --allowJs --checkJs --noEmit --strict false --target es2022 --module nod
 `--strict false` matters because TypeScript 7 is strict by default. Fix what it finds. The checkpoint-1 reference passes it with 0 errors. The flags say: check JavaScript files (`--allowJs --checkJs`), don't write any output (`--noEmit`), and understand modern syntax and ES modules (`--target`, `--module`). Day 5.7 lists the kinds of error to expect.
 
 ## 3. Ahead? Challenges
+
+These go beyond the course. Each one uses only what you've already built, so they're a good test of whether the pieces fit together the way you think they do.
 
 1. **A `grep` tool.** Add `src/tools/builtin/grep.js`: `{ pattern, path?, glob? }`, read-only, jailed, truncated, skipping `node_modules`/`.git`. Write its description for the model (Day 9), then compare how often the model uses `grep` versus `bash grep`.
 
