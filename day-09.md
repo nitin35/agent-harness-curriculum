@@ -12,17 +12,21 @@ registry.toProviderTools();
 await provider.chat(messages, registry.toProviderTools());                                 // the model now "sees" lookup
 ```
 
-Tools have a contract (`ToolDefinition`, `ToolResult`), a hand-written argument validator, and a `Map`-backed registry. You also measure how much a tool's **description** changes what the model does, which matters more than almost anything else you'll do today.
+That snippet is the whole path from your code to the model. A tool is registered, the registry turns it into plain JSON, and the provider sends it, so the model now "sees" `lookup`. Behind it are a contract every tool follows (`ToolDefinition`, `ToolResult`), a hand-written argument validator, and a `Map`-backed registry. You also measure how much a tool's **description** changes what the model does, which matters more than almost anything else you'll do today.
 
 ## Why it matters
 
-Tools are the agent's hands. Before you build real ones (Days 10–11), you fix the rules every tool follows: what it declares, what it returns, what failure looks like, and what happens when the model sends nonsense arguments. That last one is a policy, and you set it **once**, today.
+Yesterday the harness learned to talk to a model. The model can now ask for a tool by name, and the next question is what a tool actually *is*.
+
+Tools are the agent's hands. Before you build real ones (Days 10–11), you fix the rules every tool follows: what it declares, what it returns, what failure looks like, and what happens when the model sends nonsense arguments. That last one is a policy, and you set it **once**, today. If each tool improvised its own answer, the model would meet a different kind of failure from every tool, and some of them would crash the run.
+
+You'll also find out something that surprises most people. The few sentences you write to *describe* a tool change the model's behaviour more than almost any code you'll write today, and you'll measure by how much.
 
 ## Concepts
 
 ### 1. Two shapes, plus the one you already have
 
-**A tool is an object that describes itself and knows how to run.** This is the contract every tool in the harness follows:
+A tool is an object that describes itself and knows how to run. This is the contract every tool in the harness follows:
 - **`ToolDefinition`** = `{ name, label?, description, parameters /* JSON Schema */, execute(args, { signal }), needsApproval?, readOnly? }`
 - **`ToolResult`** = `{ content, isError, details? }`. **Failures are results, not exceptions.** `details` is for the UI and the logs, and never goes to the model.
 - What the loop hands to `executeTool` is the **`ToolCall`** from Day 7, `{ id, name, arguments, parseError? }`: the same shape, under the same name. One vocabulary, no aliases.
@@ -51,18 +55,20 @@ const lookupTool = {
 };
 ```
 
-The fields fall into two groups. `name`, `description` and `parameters` are **for the model**: they're all it knows about the tool. `execute`, `label`, `needsApproval` and `readOnly` are **for the harness**. `execute` is code, and `needsApproval` and `readOnly` are policy: whether the user must approve a call (Day 12), and whether the tool can change anything (Day 20). The model never sees them.
+The fields fall into two groups. `name`, `description` and `parameters` are **for the model**: they're all it knows about the tool. `execute`, `label`, `needsApproval` and `readOnly` are **for the harness**. `execute` is code, and `needsApproval` and `readOnly` are policy: whether the user must approve a call (Day 12), and whether the tool can change anything (Day 20). The model never sees them. Keep that split in mind, because concept 4 depends on it.
 
-**A tool reports failure by returning it.** A missing glossary entry isn't a crash; it's something the model should hear and adapt to (Day 5's operational errors):
+A tool reports failure by returning it. A missing glossary entry isn't a crash. It's something the model should hear and adapt to, which is Day 5's operational error:
 
 ```js
 { content: 'tool pair: an assistant message with tool calls, plus one result per call.', isError: false }
 { content: "No glossary entry for 'banana'.", isError: true, details: { term: 'banana' } }
 ```
 
+A tool's own failures are its business. Arguments that don't make sense are everyone's, and that's the next concept.
+
 ### 2. The malformed-arguments policy (fixed for the whole course)
 
-**Models send bad arguments, and the harness has to decide, once, what happens then.** When arguments are broken JSON (`parseError` from Day 8) or fail the schema, the harness returns:
+Models send bad arguments, often: a number where a path should be, a required field left out, JSON that stops halfway. The harness has to decide, once, what happens then. When arguments are broken JSON (`parseError` from Day 8) or fail the schema, the harness returns:
 
 ```
 ToolResult {
@@ -85,11 +91,13 @@ There are three things it must **never** do:
 - **"fix" the arguments and run anyway**, which executes something the model didn't ask for;
 - **retry silently**, which hides the problem.
 
-Day 12's `executeTool` implements this.
+The second one is the tempting one. Turning `42` into `"42"` looks helpful, but it means the harness ran a command nobody requested, and the model never learns that its call was wrong. Day 12's `executeTool` implements the policy.
+
+To return "path must be string, got number", though, something has to check the arguments against the tool's schema.
 
 ### 3. A small JSON Schema checker
 
-**JSON Schema describes the shape of JSON data, in JSON.** A tool's `parameters` is one: the model reads it to know what to send, and the harness uses it to check what came back. Here is a schema like the one Day 10's `read` tool will have:
+**JSON Schema describes the shape of JSON data, in JSON.** A tool's `parameters` is one. The model reads it to know what to send, and the harness uses it to check what came back. Here is a schema like the one Day 10's `read` tool will have:
 
 ```js
 const schema = {
@@ -106,7 +114,7 @@ const schema = {
 
 It says: the arguments are an object. `path` is a string, and it's required. `offset` and `limit` are whole numbers, and optional. Nothing else is allowed.
 
-**Check only what models get wrong.** You don't need all of JSON Schema. Check `type`, `required`, `properties` (recursively), `enum`, `items` and `additionalProperties: false`: that catches what models actually get wrong. `validateArguments(schema, value)` returns `{ ok: true }` or `{ ok: false, error }`, so a validation failure is an *expected branch*, not an exception. Ajv is the optional Stretch, but only after yours works.
+You don't need all of JSON Schema. Check `type`, `required`, `properties` (recursively), `enum`, `items` and `additionalProperties: false`: that catches what models actually get wrong. `validateArguments(schema, value)` returns `{ ok: true }` or `{ ok: false, error }`, so a validation failure is an *expected branch*, not an exception. Ajv is the optional Stretch, but only after yours works.
 
 ```js
 validateArguments(schema, { path: 'notes.txt' })
@@ -125,30 +133,38 @@ Each error names the property and says what was wrong, because the model reads i
 
 Python contrast: this is what the `jsonschema` package, or a pydantic model, does for you. Today you write a small one, so you know exactly what it checks.
 
+With definitions you can check and arguments you can check, the remaining piece is somewhere to keep the tools.
+
 ### 4. `Map`, not a plain object
 
-**A plain object comes with keys you didn't put there.** Every object inherits properties from `Object.prototype`, so an empty object already "has" a `toString`, and one special key doesn't store anything at all:
+A registry looks up tools by name, and a plain object looks like the obvious way to store things by name. It isn't, because a plain object comes with keys you didn't put there. Every object inherits properties from `Object.prototype`, and one special key doesn't store anything at all. Here's a word counter that meets two unlucky words:
 
 ```js run
-const tools = {};
-'toString' in tools                       // → true: inherited, not registered
-tools.toString                            // → [Function: toString]
+const text = 'the cat sat on the constructor and the __proto__';
+const counts = {};
+for (const word of text.split(' ')) counts[word] = (counts[word] ?? 0) + 1;
 
-tools['__proto__'] = { name: '__proto__' };
-Object.keys(tools)                        // → []: no key was added
-tools.name                                // → '__proto__': the object's prototype was replaced instead
+counts.the                  // → 3
+counts.constructor          // → 'function Object() { [native code] }1'
+Object.keys(counts)         // → ['the', 'cat', 'sat', 'on', 'constructor', 'and']
 ```
 
-A tool named `toString` or `__proto__` is a real possibility. A `Map` has no prototype-key traps, a real `.size`, and insertion order:
+Two things went wrong, and neither threw an error. `counts['constructor']` wasn't missing: every object inherits a `constructor` property, the function `Object`, so `?? 0` never kicked in, and adding `1` to a function turned it into a string. And `__proto__` was never counted at all. Assigning to `counts['__proto__']` tries to replace the object's prototype instead of storing a key, and since the value was a number, nothing happened.
+
+A `Map` has none of these traps. It stores exactly the keys you give it, whatever they are:
 
 ```js run
-const registry = new Map();
-registry.has('toString')                  // → false
-registry.set('__proto__', { name: '__proto__' });
-registry.size                             // → 1: stored like any other key
+const text = 'the cat sat on the constructor and the __proto__';
+const counts = new Map();
+for (const word of text.split(' ')) counts.set(word, (counts.get(word) ?? 0) + 1);
+
+counts.get('the')           // → 3
+counts.get('constructor')   // → 1
+counts.get('__proto__')     // → 1
+counts.size                 // → 7
 ```
 
-`set`, `get`, `has`, `delete` and `size` are most of what you need, and iterating a `Map` visits entries in the order they were added. That order is why `getTools()` can return tools in registration order. Python contrast: a `Map` behaves like a `dict`; a plain JavaScript object is something different, with inherited keys.
+A tool named `toString` or `__proto__` is a real possibility, so the registry keeps its tools in a `Map`. `set`, `get`, `has`, `delete` and `size` are most of what you need, and iterating a `Map` visits entries in the order they were added. That order is why `getTools()` can return tools in registration order. Python contrast: a `Map` behaves like a `dict`. A plain JavaScript object is something different, with inherited keys.
 
 **But the wire is JSON.** `toProviderTools()` returns plain objects with `execute`, `needsApproval` and `readOnly` stripped. (`JSON.stringify` silently *omits* function-valued properties, so a leak wouldn't even show up as an error.) Policy fields are worse, because they're data:
 
@@ -159,9 +175,11 @@ JSON.stringify({ name: 'lookup', execute() {}, needsApproval: true })
 
 So build each provider tool from the three fields the model needs, by name, rather than copying the definition and deleting fields. Copying and deleting leaks the next field anyone adds.
 
+The registry decides *which* tools the model sees. What the model does with them depends almost entirely on how they're described.
+
 ### 5. Write descriptions for the model
 
-**The model chooses tools *only* from their names, descriptions and schemas.** It can't read your code. Good descriptions say:
+The model chooses tools *only* from their names, descriptions and schemas. It can't read your code. So a description is not a comment for other programmers. It's the model's entire understanding of the tool. Good descriptions say:
 - **what it does and what it returns**: "Returns the file content…";
 - **when to use it, and when to use something else**: "To change part of a file, prefer edit";
 - **the limits**: "Paths are relative to the workspace root. Cannot read binary files.";
@@ -173,11 +191,13 @@ If a human couldn't tell which of two tools to use from their descriptions, the 
 
 ### 6. Measure, don't anecdote
 
-**One run tells you almost nothing.** A model is not deterministic: the same prompt can call a tool on one run and answer in prose on the next. One run that calls a tool tells you almost nothing; **ten** runs that call it nine times tell you something. Count, and compare counts.
+That claim is easy to make and easy to fool yourself about, so today you test it. The difficulty is that a model is not deterministic: the same prompt can call a tool on one run and answer in prose on the next. One run that calls a tool tells you almost nothing. **Ten** runs that call it nine times tell you something. So count, and compare counts.
 
-**Small differences are noise.** With ten trials, 9/10 against 8/10 could easily swap places on the next run. 9/10 against 1/10 is a real difference. Before you conclude that a change helped, ask whether the gap is bigger than the run-to-run wobble. Day 29 turns this into evals, with more trials and proper statistics.
+Small differences are noise. With ten trials, 9/10 against 8/10 could easily swap places on the next run. 9/10 against 1/10 is a real difference. Before you conclude that a change helped, ask whether the gap is bigger than the run-to-run wobble. Day 29 turns this into evals, with more trials and proper statistics.
 
 ## Build
+
+The contract comes first, because the registry checks every tool against it. Then the registry, then tests that prove nothing but JSON leaves it, and finally the experiment, which needs a working registry and provider.
 
 **Files today:** `src/shared/tool-schemas.js`, `src/tools/tool-registry.js`, `tests/tool-registry-roundtrip.test.js`, `scripts/tool-description-experiment.js` and `notes/day-09.md`.
 
@@ -194,7 +214,7 @@ If a human couldn't tell which of two tools to use from their descriptions, the 
 - `validateArguments(schema, value, path = 'arguments')`, as in concept 3. Error messages name the property: `"missing required property 'path'"`, `"limit must be integer, got number"`, `"unexpected property 'output' (allowed: path, offset, limit)"`.
 - A comment block with the malformed-arguments policy, word for word. Day 12 refers to it.
 
-The name rule is a regular expression: `/^[A-Za-z0-9_.-]{1,64}$/.test(name)`. `^` and `$` anchor it to the whole string, so `'look up'` (with a space) fails. To report a value's type in an error, remember that `typeof null` and `typeof []` are both `'object'` (Day 2), so check those two first.
+Two hints. The name rule is a regular expression: `/^[A-Za-z0-9_.-]{1,64}$/.test(name)`. `^` and `$` anchor it to the whole string, so `'look up'` (with a space) fails. To report a value's type in an error, remember that `typeof null` and `typeof []` are both `'object'` (Day 2), so check those two first.
 
 ### 9.2 `src/tools/tool-registry.js` — Core
 
@@ -265,6 +285,12 @@ Register `read` and `bash` together and ask "Show me what's in notes.txt" ten ti
 
 ## Check
 
+Every tool in the harness now follows one contract, and every failure, from a missing entry to arguments that make no sense, comes back to the model as a result it can act on. Arguments are checked against the tool's schema, with errors written for the model to read. The registry stores tools safely by name and sends the model only plain JSON. And you have numbers, not a hunch, for how much a description matters.
+
+Tomorrow you build the first real tools on this contract. Day 10's `read` and `write` touch your actual files, so they start with a jail that keeps them inside the workspace.
+
+Before you move on, check:
+
 - [ ] `node --test tests/course/day09-*` green (12 tests)
 - [ ] Your round-trip test passes
 - [ ] `notes/day-09.md` has your description experiment table, and your two answers
@@ -301,11 +327,11 @@ Expected. Your model, your Ollama version and plain chance all move the numbers.
 
 ## Common mistakes
 
-- Throwing from the argument-validation path, so one bad tool call kills the run.
-- Silently letting the last registration win on duplicate names.
-- Leaking `needsApproval` into the payload. It's harness policy; the model has no say in it.
-- Building `toProviderTools` by copying the whole definition and deleting fields. The next field anyone adds leaks.
-- Judging a description from one run.
+- **Throwing from the argument-validation path.** Bad arguments are the model's mistake, and a throw turns one bad call into a dead run instead of a result the model can fix.
+- **Silently letting the last registration win on duplicate names.** Two parts of the code then disagree about which tool `read` is, and nothing tells you. A duplicate is a bug, so throw.
+- **Leaking `needsApproval` into the payload.** It's harness policy, and the model has no say in it.
+- **Building `toProviderTools` by copying the whole definition and deleting fields.** The next field anyone adds leaks, because nobody remembers to delete it.
+- **Judging a description from one run.** A model's choices vary from run to run, so one run can show any result. Count over ten.
 
 ## Self-check
 
