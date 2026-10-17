@@ -11,17 +11,21 @@ agent> (dim) The user wants the newest file. I can use ls -t…        ← think
 The newest file is toy/main.mjs.                                     ← the answer, streamed token by token
 ```
 
-Text appears as the model produces it, the model's **thinking** shows dimmed, and big command output is cut **safely**. You also write your first two real harness modules, `src/shared/ndjson.js` and `src/tools/truncate.js`, and fix a bug you wrote yesterday without knowing it.
+No more waiting in silence. Text appears as the model produces it, and the model's **thinking** shows dimmed, so you can watch it reason before it answers. Big command output is now cut **safely**, at a character boundary, with a note telling the model what it missed. Along the way you write your first two real harness modules, `src/shared/ndjson.js` and `src/tools/truncate.js`, and you fix a bug you wrote yesterday without knowing it.
 
 ## Why it matters
 
-A model that thinks for 20 seconds before saying anything feels broken. Streaming fixes that, but streamed bytes arrive in **chunks that know nothing about lines or characters**. Today you learn to frame them correctly. You also fix the `out.slice(0, 4000)` from Day 1, which can cut a character in half.
+Yesterday you made Ctrl+C work, so you can stop the toy whenever you like. Today you fix the other thing you probably wrote in your Day 1 notes: the wait. A model that thinks for 20 seconds before saying anything feels broken, even when it's working perfectly. The fix is **streaming**: asking the model to send its answer in small pieces as it writes them, and showing each piece the moment it arrives.
 
-This is a heavier day, with three new ideas that build on each other. Generators give you a way to consume values that arrive over time. Bytes and characters explain why chunks are dangerous. NDJSON framing puts the two together.
+Streaming has a catch, and it's the real subject of today. The pieces arrive as **chunks of bytes that know nothing about lines or characters**. A chunk can end in the middle of a line, or even in the middle of a single character, and code that assumes otherwise works perfectly on English test data and breaks on the first `é`. Today you learn to put the pieces back together correctly. The same ideas also fix the `out.slice(0, 4000)` from Day 1, which can cut a character in half.
+
+This is a heavier day, with three new ideas that build on each other. Generators give you a way to consume values that arrive over time. Bytes and characters explain why chunks are dangerous. NDJSON framing puts the two together. Take them in order, and run the examples as you go.
 
 ## Concepts
 
 ### 1. Iterators and generators
+
+Before you can consume a stream, you need a way to talk about "values that come one at a time". JavaScript's answer is the iterator, and the easiest way to make one is a generator. Neither is async yet. Concept 2 adds the waiting.
 
 **An iterator hands out values one at a time.** It is an object with a `next()` method, and each call returns `{ value, done }`. An *iterable* is anything that can give you an iterator, through a method stored under the special key `Symbol.iterator`. Arrays, strings, `Map`s and `Set`s are all iterable, which is why `for...of` (Day 2) works on them. This is what `for...of` does behind the scenes:
 
@@ -50,6 +54,27 @@ g.next()              // logs: after 1    → { value: 2, done: false }
 g.next()              // → { value: undefined, done: true }
 ```
 
+Read that as a conversation between two parties. Each `next()` call says "give me one more". The generator runs from where it last stopped up to its next `yield`, hands over that value, and freezes, with all its local variables intact, until it's asked again. A `for...of` loop makes the conversation visible:
+
+```js run
+function* producer() {
+  for (let i = 1; i <= 2; i++) {
+    console.log(`producer: making ${i}`);
+    yield i;
+  }
+  console.log('producer: done');
+}
+
+for (const n of producer()) console.log(`consumer: got ${n}`);
+// → producer: making 1
+// → consumer: got 1
+// → producer: making 2
+// → consumer: got 2
+// → producer: done
+```
+
+The two take turns, and the **consumer is in charge**. The producer never makes value 2 until the consumer has finished with value 1. This is called a *pull* model: values are pulled out by the consumer, not pushed at it. The pause should look familiar from Day 3. An `async` function pauses at `await` until a *promise* resumes it. A generator pauses at `yield` until its *consumer* resumes it.
+
 **Generators are lazy, so they can be infinite.** A generator does no work until it's asked, so a `while (true)` inside one is fine, as long as the consumer stops asking:
 
 ```js
@@ -73,11 +98,11 @@ function* take(n, iterable) {
 [...take(3, naturals())]     // → [1, 2, 3]
 ```
 
-Check the count before asking for the next value. If you check after, `take(3, source)` pulls a fourth value and throws it away; with a network stream, that is a read you didn't need.
+Check the count before asking for the next value. If you check after, `take(3, source)` pulls a fourth value and throws it away. With a network stream, that's a read you didn't need.
 
 **`yield*` passes on every value of another iterable.** `yield* [1, 2]` does the same as `yield 1;` followed by `yield 2;`. You'll use it in 4.2.
 
-**Stopping early runs the generator's cleanup.** When a `for...of` loop ends early (a `break`, a `return` or an exception), it calls the generator's `return()` method. The generator stops where it paused, and its `finally` blocks run:
+**Stopping early runs the generator's cleanup.** When a `for...of` loop ends early (a `break`, a `return` or an exception), it calls the generator's `return()` method. The paused `yield` then behaves like a `return` statement: the generator stops where it was, and its `finally` blocks run on the way out:
 
 ```js run
 function* lines() {
@@ -103,7 +128,46 @@ Python contrast: this is nearly identical to Python generators, down to `yield`,
 
 ### 2. Async generators and `for await`
 
-**An async generator yields values over time.** An `async function*` can `await` inside its body and `yield` values as they become ready. Each `next()` call returns a promise, and `for await...of` awaits each one for you:
+A plain generator produces each value immediately when asked. A stream can't: the next piece of a model's answer may not have arrived yet. So we need a generator that can also *wait*.
+
+**An async generator yields values over time.** An `async function*` combines the two kinds of pause you now know. It can `await` inside its body, which pauses it until a promise settles. And it can `yield`, which pauses it until the consumer asks for more. Because its values may not be ready yet, its `next()` returns a *promise* of `{ value, done }`, not the object itself:
+
+```js run
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function* countdown(from) {
+  for (let n = from; n > 0; n--) {
+    await delay(10);
+    yield n;
+  }
+}
+
+const it = countdown(2);
+const first = it.next();
+console.log(first);                  // → Promise { <pending> }   not the value: it isn't ready yet
+await first                          // → { value: 2, done: false }
+await it.next()                      // → { value: 1, done: false }
+await it.next()                      // → { value: undefined, done: true }
+```
+
+The first `next()` starts the generator and returns a pending promise at once. The generator runs until `await delay(10)`, and the promise fulfils with `{ value: 2, done: false }` only when it reaches `yield 2`. Each later `next()` resumes it from that `yield`.
+
+**`for await...of` awaits each `next()` for you.** That's the whole job of `for await`. These two loops do the same thing:
+
+```js
+for await (const n of countdown(3)) {
+  console.log(n);
+}
+
+const it = countdown(3);
+while (true) {
+  const { value, done } = await it.next();
+  if (done) break;
+  console.log(value);
+}
+```
+
+Here's the friendly version running, half a second between values:
 
 ```js run
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -118,13 +182,37 @@ async function* countdown(from) {
 for await (const n of countdown(3)) console.log(n);   // 3, 2, 1, half a second apart
 ```
 
-The rules from concept 1 still hold. Nothing runs until the consumer asks, and an early `break` still runs the generator's `finally`. 4.1 has you prove it.
+**While the generator waits, the event loop is free.** An `await` inside the generator pauses the generator and the loop that's consuming it, and nothing else. Timers, I/O and Ctrl+C handlers keep running in the meantime, exactly as Day 3 described:
+
+```js run
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function* slowNumbers() {
+  yield 1;
+  await delay(100);
+  yield 2;
+}
+
+setTimeout(() => console.log('timer: the event loop is free while the generator waits'), 50);
+for await (const n of slowNumbers()) console.log('got', n);
+// → got 1
+// → timer: the event loop is free while the generator waits
+// → got 2
+```
+
+That's what makes streaming compatible with yesterday's abort. While the toy waits for the next chunk of an answer, readline can still notice Ctrl+C.
+
+**The rules from concept 1 still hold.** Nothing runs until the consumer asks, and the generator never runs ahead of the loop: while the loop body is busy with one value, the generator stays paused. An early `break` still runs the generator's `finally`, and `for await` waits for that cleanup to finish, even if the cleanup itself `await`s something, before the code after the loop runs. 4.1 has you prove it. And if the generator throws, the error comes out of the `for await` line, where an ordinary `try/catch` around the loop handles it.
+
+Python contrast: Python's `async def` with `yield`, and `async for`, work the same way.
 
 **This is the shape of a streaming reply.** A model's answer arrives as a series of pieces over several seconds, and an async generator turns that into something you consume with one loop. Today's `readNdjson(stream)` is an async generator: it yields each record from Ollama as soon as its line is complete, and the toy reads them with `for await`. Day 16's `chatStream` is one too.
 
 ### 3. Bytes versus strings
 
-**Strings and bytes are different things.** A JavaScript string is a sequence of UTF-16 *code units*, and `length` counts those units. Files, pipes and sockets carry *bytes*, and text travels through them encoded as UTF-8, which uses 1 to 4 bytes per character. In Node, a `Buffer` holds bytes. (`Buffer` is Node's subclass of `Uint8Array`, the standard byte array.)
+Now for the reason chunks are dangerous. It has nothing to do with async code. It's about the difference between the text you see and the bytes that carry it.
+
+**Strings and bytes are different things.** Every character has a number in Unicode, its **code point**, written like `U+00E9` for `é`. A JavaScript string stores text as a sequence of 16-bit *code units* (UTF-16), and `length` counts those units, not characters. Files, pipes and sockets carry *bytes*, and text travels through them encoded as UTF-8, which uses 1 to 4 bytes per code point. In Node, a `Buffer` holds bytes. (`Buffer` is Node's subclass of `Uint8Array`, the standard byte array.)
 
 ```js
 'é'.length                     // → 1
@@ -140,6 +228,17 @@ ASCII characters take 1 byte each, so English text hides the difference. Accents
 
 Python contrast: Python 3 also keeps `str` and `bytes` apart, but `len('🙂')` is 1 in Python, because it counts code points. C++ contrast: a JavaScript string is closer to a `std::u16string` than to a `std::string` of UTF-8 bytes.
 
+**How UTF-8 lays out a character.** It helps to see the bytes in binary. The first byte of a character says how many bytes the character has, and every byte after it starts with the bits `10`:
+
+| Character | Code point | UTF-8 bytes | In binary |
+|---|---|---|---|
+| `h` | U+0068 | `68` | `01101000` |
+| `é` | U+00E9 | `c3 a9` | `11000011 10101001` |
+| `→` | U+2192 | `e2 86 92` | `11100010 10000110 10010010` |
+| `🙂` | U+1F642 | `f0 9f 99 82` | `11110000 10011111 10011001 10000010` |
+
+A byte starting with `0` is a whole character on its own. A byte starting with `110`, `1110` or `11110` starts a character of 2, 3 or 4 bytes. A byte starting with `10` is a *continuation byte*, never the start of anything. Keep that last rule in mind: it's how you'll find a safe place to cut.
+
 **A chunk can end in the middle of a character.** A stream delivers bytes in chunks of whatever size the network or the pipe chose, and the chunk boundaries know nothing about characters. Decode each chunk on its own, and a character that straddles two chunks turns into two `�` (U+FFFD, the *replacement character*):
 
 ```js
@@ -148,6 +247,8 @@ const first = bytes.subarray(0, 2);            // 68 c3   ends halfway through �
 const second = bytes.subarray(2);              // a9 21
 first.toString() + second.toString()           // → 'h��!'
 ```
+
+The first chunk ends with `c3`, a lead byte with nothing after it, so the decoder gives up on it and emits `�`. The second chunk starts with `a9`, a continuation byte with no lead byte before it, so it becomes a second `�`.
 
 **A streaming decoder fixes it.** Use one `TextDecoder` for the whole stream, and pass `{ stream: true }` on every call. It holds back an unfinished character until the next chunk completes it:
 
@@ -158,7 +259,9 @@ decoder.decode(second, { stream: true })       // → 'é!'
 decoder.decode()                               // → ''     end of input: flush anything still held
 ```
 
-Node's own streams can do this for you: `stream.setEncoding('utf8')` gives the stream its own streaming decoder, and its `'data'` events deliver strings instead of `Buffer`s.
+The decoder can do this only because it's the *same* decoder for every chunk: it remembers the half character between calls. That's why it has to be one decoder per stream, created once, and never a new one per chunk.
+
+Node has two families of streams, and today you use both. **Node streams**, such as `child.stdout`, deliver chunks as `'data'` events, as in Day 3's `runBash`. **Web streams**, such as a `fetch` response's `res.body`, are read with a reader (concept 4). For Node streams, `stream.setEncoding('utf8')` gives the stream its own streaming decoder, and its `'data'` events then deliver strings instead of `Buffer`s.
 
 **`out += chunk` is a decoder per chunk in disguise.** When you add a `Buffer` to a string, JavaScript calls `toString()` on that one chunk, so a split character becomes `��`, exactly as above. Your Day 3 `runBash` does that, and 4.4 makes it fail in front of you.
 
@@ -171,7 +274,7 @@ Buffer.byteLength(s)                           // → 6000   a "4000" budget tha
 '🙂🙂'.slice(0, 1)                             // → '\ud83d'   half an emoji, which prints as �
 ```
 
-To measure, use `Buffer.byteLength(s)`. To cut, turn the text into bytes with `Buffer.from(s)`, take `buf.subarray(0, n)`, then **back up** to the start of a character. UTF-8 makes that possible. Every byte that *continues* a character looks like `10xxxxxx` in binary (`0x80` to `0xBF`), and no character ever starts with one. So if the first byte you would drop is a continuation byte, its character began before the cut, and the cut must move left:
+To measure, use `Buffer.byteLength(s)`. To cut, turn the text into bytes with `Buffer.from(s)`, take `buf.subarray(0, n)`, then **back up** to the start of a character. The table above makes that possible. Every byte that *continues* a character looks like `10xxxxxx` in binary (`0x80` to `0xBF`), and no character ever starts with one. So if the first byte you would drop is a continuation byte, its character began before the cut, and the cut must move left:
 
 ```js
 const bytes = Buffer.from('héllo');            // <Buffer 68 c3 a9 6c 6c 6f>
@@ -181,9 +284,11 @@ cut                                            // → 1
 bytes.subarray(0, cut).toString()              // → 'h'
 ```
 
-`bytes[cut] & 0xc0` keeps the top two bits of the byte, and `0x80` is `10` followed by zeros. This loop is the heart of 4.3's `truncateText`.
+`bytes[cut] & 0xc0` keeps the top two bits of the byte, and `0x80` is `10` followed by zeros. So the test asks "does this byte start with `10`?". Here `bytes[2]` is `a9`, which does, so the cut moves left to 1, where `c3` starts a character. This loop is the heart of 4.3's `truncateText`.
 
 ### 4. NDJSON framing
+
+Bytes become characters with a streaming decoder. Characters still have to become *messages*. Any protocol that sends messages over a stream of bytes has to mark where each message ends, which is called **framing**. Some protocols put each message's length in front of it. Ollama uses the simplest scheme there is: a newline after each message.
 
 **With `stream: true`, Ollama answers with NDJSON**: *newline-delimited JSON*, one complete JSON object per line.
 
@@ -223,9 +328,17 @@ parser.push(encode(':2}\n'))                        // → [{ n: 2 }]
 parser.flush()                                      // → []           nothing left over
 ```
 
-`flush()` is for the end of the body. If the last line had no newline after it, it is still sitting in the buffer, and `flush()` parses it.
+Follow the parser's buffer through those three calls:
 
-**Reading a `ReadableStream`.** You read a web stream through a *reader*. Each `read()` returns a promise of `{ done, value }`, where `value` is the next chunk:
+| Call | Buffer before | Text after decoding | Pieces after the split | Parsed | Buffer after |
+|---|---|---|---|---|---|
+| first `push` | `''` | `{"n":1}\n{"n"` | `{"n":1}`, `{"n"` | `{ n: 1 }` | `{"n"` |
+| second `push` | `{"n"` | `{"n":2}\n` | `{"n":2}`, `''` | `{ n: 2 }` | `''` |
+| `flush` | `''` | | | nothing | `''` |
+
+The buffer always holds the start of a line that hasn't ended yet, and the newline is what moves text out of it. `flush()` is for the end of the body. If the last line had no newline after it, it is still sitting in the buffer, and `flush()` parses it.
+
+**Reading a `ReadableStream`.** You read a web stream through a *reader*. Each `read()` returns a promise of `{ done, value }`, where `value` is the next chunk. When the stream has ended, `read()` fulfils with `done: true`:
 
 ```js
 const reader = res.body.getReader();
@@ -236,7 +349,9 @@ while (true) {
 }
 ```
 
-`readNdjson` wraps this loop in an async generator (concept 2), so the toy can write `for await (const chunk of readNdjson(res.body))`. If the consumer stops early, the generator's `finally` calls `reader.cancel()`. That tells `fetch` nobody will read the rest, so it can close the connection.
+That `if (done) break` matters more than it looks. Once a stream has ended, every further `read()` fulfils at once with `done: true`. Without the `break`, the loop goes round forever, and since each `await` resumes as a microtask, it never lets a timer or Ctrl+C handler run. It's Day 3's microtask starvation, made by accident.
+
+`readNdjson` wraps this loop in an async generator (concept 2), so the toy can write `for await (const chunk of readNdjson(res.body))`. If the consumer stops early, the generator's `finally` calls `reader.cancel()`. That tells `fetch` nobody will read the rest, so it can close the connection. The `finally` runs on every way out of the generator, including an error or an abort, so the stream is always cleaned up.
 
 ### 5. The truncation contract
 
@@ -246,7 +361,7 @@ while (true) {
 ...[truncated: showing 32768 of 120004 bytes. Use read with offset/limit or a narrower command to see more.]
 ```
 
-**The marker is for the model.** A silent cut would leave the model believing it had seen everything. The marker says how much it didn't see, and what to do about it. This is 4.3's `truncateText` with a tiny budget:
+**The marker is for the model.** A silent cut would leave the model believing it had seen everything, and it would reason confidently from half the evidence. The marker says how much it didn't see, and what to do about it. This is 4.3's `truncateText` with a tiny budget:
 
 ```js
 truncateText('héllo world', 5, { hint: 'Run a narrower command to see more.' })
@@ -256,15 +371,23 @@ truncateText('héllo world', 5, { hint: 'Run a narrower command to see more.' })
 truncateText('héllo world', 2).shownBytes      // → 1   2 bytes would split é, so only 'h' is kept
 ```
 
-**The advice at the end is a parameter.** The real harness has a `read` tool (Day 10), so that's the default. The toy has no `read` tool, so it passes its own advice. Never point the model at a tool it doesn't have. (Day 11 adds a second mode for command output, which keeps the head *and* the tail.)
+The first call keeps `héll`: 5 bytes, because `é` takes two. The second call shows concept 3's backing-up loop at work.
+
+**The advice at the end is a parameter.** The real harness has a `read` tool (Day 10), so that's the default. The toy has no `read` tool, so it passes its own advice. Never point the model at a tool it doesn't have: it will try to call it. (Day 11 adds a second mode for command output, which keeps the head *and* the tail.)
 
 ### 6. Backpressure (advanced)
 
-**A stream produces only as fast as you read.** A `ReadableStream` keeps a small queue. When the queue is full, it stops asking its source for more, and it starts again when you `read()`. Over a network, TCP passes the same pressure back to the sender. So if you `await` each `read()`, a fast producer can't run far ahead of you: the stream waits.
+One last question about streams: what happens when data arrives faster than you can use it?
+
+**A stream produces only as fast as you read.** A `ReadableStream` sits between a *source*, which produces chunks, and you, the consumer. It keeps a small queue of chunks in between. When the queue is full, it stops asking its source for more, and it starts again when you `read()` and make room. This is **backpressure**: the consumer's pace pushes back on the producer. Over a network, TCP passes the same pressure back to the sender. So if you `await` each `read()`, a fast producer can't run far ahead of you: the stream waits.
+
+It's the pull model from concept 1 again, with a small buffer in the middle. The consumer asks, and only then does the producer make more.
 
 **So consume a response as it arrives.** `await res.text()` waits for the whole body and holds all of it in memory before you see a single character. For a model's reply, that's the 20-second silence streaming exists to fix. Never buffer a whole response "for convenience". Stretch 4.6 lets you watch backpressure happen.
 
 ## Build
+
+The steps follow the concepts. First you try generators in a scratch file. Then you write the two modules the real harness keeps, the NDJSON parser and the truncator, with course tests to tell you when they're right. Then you find yesterday's bug, and finally you plug it all into the toy.
 
 **Files today:** `scratch/generators.js`, `src/shared/ndjson.js`, `src/shared/constants.js`, `src/tools/truncate.js`, `scratch/split-utf8.mjs`, and the four toy modules.
 
@@ -278,7 +401,7 @@ In `scratch/generators.js`:
 
 ### 4.2 `src/shared/ndjson.js` — Core
 
-This is your first real harness module. Its API:
+This is your first real harness module: it lives in `src/`, not `toy/`, and you'll still be using it on Day 30. Write `NdjsonParser` first and get its tests passing, then wrap it in `readNdjson`. The parser has no async code at all, so it's much easier to test on its own. Its API:
 
 ```js
 export class NdjsonParser {
@@ -312,7 +435,7 @@ cp ../agent-harness-curriculum/course-tests/day-04/*.test.js tests/course/
 node --test tests/course/day04-ndjson.test.js
 ```
 
-They split a line in the middle, split `é` and `→` across chunks, feed one byte at a time, and check that `break` cancels the stream.
+They split a line in the middle, split `é` and `→` across chunks, feed one byte at a time, and check that `break` cancels the stream. The one-byte-at-a-time test is the harshest: every multi-byte character and every line is split, so a parser that passes it handles any chunking the network can produce.
 
 ### 4.3 `src/tools/truncate.js` — Core
 
@@ -359,7 +482,7 @@ You get `h��!`. Fix it with two lines before the `'data'` handlers, `child.s
 
 ### 4.5 Stream the toy — Core
 
-Thread two callbacks, `onText` and `onThinking`, from the REPL down to the client.
+Thread two callbacks, `onText` and `onThinking`, from the REPL down to the client. It's the same shape as yesterday's `signal`: the REPL decides what should happen, and every layer passes the decision down to the code that knows when it's time.
 
 **1. `toy/ollama.mjs`:** `chat(messages, tools, { signal, onText = () => {}, onThinking = () => {} } = {})` streams, and still returns the whole reply at the end. Ask for thinking, but not every model can think: a model without that capability answers HTTP 400 `"<model>" does not support thinking`. Keep a `let think = true` next to the client's other settings (in the closure), and turn it off for good the first time you hear that:
 
@@ -443,6 +566,12 @@ Build a `ReadableStream` with a `pull()` producer that counts what it has made, 
 
 ## Check
 
+The toy now feels alive. It shows its thinking and its answer as they're written, and a long command can't flood the conversation. Underneath are the three ideas you'll keep using every time bytes arrive from somewhere else. Async generators let you consume values over time with one loop, while the event loop stays free. A streaming decoder turns bytes into text without breaking characters. Framing turns text into messages, keeping a partial line until its end arrives. You've also met your first real harness modules, and the course tests that prove them.
+
+That closes the toy's main features. Day 5 is about what happens when things go wrong: error classes, validating what comes in, and writing tests of your own.
+
+Before you move on, check:
+
 - [ ] `node --test tests/course/*.test.js` passes 26 tests: Day 3's 9, plus ndjson (8), truncate (7) and toy-bash (2)
 - [ ] The toy streams thinking (dimmed) and the answer live, and still runs tools
 - [ ] `runBash` decodes with `setEncoding`, and cuts output with `truncateText`, never `slice`
@@ -487,6 +616,16 @@ The model has no thinking capability, and your client asked for it. Add the retr
 A response body can be read only once. You probably called `await res.text()` twice: once to check the 400, then again for the error message. Read it once into a variable, as 4.5 does.
 </details>
 
+<details><summary>The toy freezes at 100% CPU after an answer, and Ctrl+C does nothing</summary>
+
+Your reader loop is missing `if (done) break`. Once the stream has ended, every `read()` fulfils at once with `done: true`, so the loop spins forever, and because each `await` resumes as a microtask, no timer or Ctrl+C handler ever gets to run (concept 4). Kill the process from another terminal, and add the `break`.
+</details>
+
+<details><summary><code>SyntaxError: Unexpected strict mode reserved word</code> on a <code>yield</code></summary>
+
+A `yield` sits inside a callback, as in `records.forEach((r) => { yield r; })`. `yield` only works directly in the body of the generator itself, not in a function nested inside it. Use `yield* records`, or a `for...of` loop around the `yield`.
+</details>
+
 <details><summary>Everything after the answer stays dim</summary>
 
 A `DIM` was written without a matching `RESET`. Write `RESET` after every run, including an aborted one. To fix a terminal that's already dim, run `printf '\033[0m'`.
@@ -494,11 +633,12 @@ A `DIM` was written without a matching `RESET`. Write `RESET` after every run, i
 
 ## Common mistakes
 
-- Calling `JSON.parse` on every chunk ("a chunk is a line"). It fails the moment a line spans two chunks.
-- A new decoder per chunk, which corrupts exactly the characters your tests use. `out += chunk` on `Buffer`s is the same mistake in disguise.
-- Budgeting bytes with `string.length`.
-- Reading tool calls from the final `done` chunk, where Ollama doesn't repeat them.
-- Calling `await res.text()` and splitting the result. It parses correctly, but nothing appears until the whole reply has arrived: that isn't streaming.
+- **Calling `JSON.parse` on every chunk ("a chunk is a line").** Chunk boundaries are chosen by the network, not by the sender, so it fails the moment a line spans two chunks.
+- **A new decoder per chunk.** A decoder can complete a split character only if it saw the first half, so a fresh one per chunk corrupts exactly the characters your tests use. `out += chunk` on `Buffer`s is the same mistake in disguise.
+- **Budgeting bytes with `string.length`.** `length` counts UTF-16 units, and one unit can stand for one, two or three bytes, so the budget is wrong for any text that isn't plain ASCII.
+- **Reading tool calls from the final `done` chunk.** Ollama sends each call once, in an earlier chunk, and doesn't repeat it at the end.
+- **Calling `await res.text()` and splitting the result.** It parses correctly, but nothing appears until the whole reply has arrived: that isn't streaming.
+- **Leaving out `if (done) break` in a reader loop.** A finished stream answers every `read()` at once, so the loop never ends and never lets anything else run.
 
 ## Self-check
 
