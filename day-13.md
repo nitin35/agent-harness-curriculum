@@ -12,28 +12,69 @@ $ node scripts/smoke-loop.js "Run sleep 30 with bash, then tell me the date."
 answer (1 turns, aborted=true):            ← back in ~1 s, not 30, and no stack trace
 ```
 
-…and a test suite that proves the whole engine works **with Ollama switched off**.
+Ctrl+C during a 30-second command brings the run back in about a second, with `aborted=true` and no stack trace. Behind it is a test suite that proves the whole engine works **with Ollama switched off**.
 
 ## Why it matters
 
-Abort is where harnesses get subtle bugs. The fetch dies but the child keeps running. Or the child dies but the history now holds a tool call with no result, and the next request fails. Or abort throws, and every caller needs a `try/catch` it doesn't have. Today you make abort plumbing, not an error path, and you build `ScriptedProvider`, the fake model that every later test, eval and demo runs on.
+On Day 3 you made Ctrl+C work in the toy, with one signal handed to everything that waits. Yesterday's loop has more places to wait, and more state that an interruption can leave half-finished. Today the real loop gets the same treatment.
+
+Abort is where harnesses get subtle bugs, and they come in three flavours. The fetch dies but the child keeps running. Or the child dies but the history now holds a tool call with no result, and the next request fails. Or abort throws, and every caller needs a `try/catch` it doesn't have. None of these show up when you test the happy path. They show up the first time someone changes their mind halfway through a long command.
+
+So today you make abort plumbing, not an error path. You also build `ScriptedProvider`, the fake model that every later test, eval and demo runs on, and with both in place you reach Checkpoint 1: an engine that works, stops cleanly, and can be proven with Ollama switched off.
 
 ## Concepts
 
 ### 1. One signal, every sink
 
-**A "sink" is anywhere the run spends time.** For the loop, that's waiting for the model, running a tool, and moving on to the next call. `run(…, { signal })` passes the **same** `AbortSignal` to:
+A *sink* here is anywhere the run spends time waiting. For the loop, that's waiting for the model, running a tool, and moving on to the next call. `run(…, { signal })` passes the **same** `AbortSignal` to:
 - `provider.chat(…, { signal })`, so the `fetch` dies;
 - `tool.execute(args, { signal })`, so `bash` kills its process group (Day 11);
 - checks between tool calls (`if (signal?.aborted)`), so the rest are skipped.
 
 This is Day 3's design, scaled up. The toy passed one signal to `fetch`, `spawn` and `rl.question`. Now the loop passes it to every provider and every tool.
 
-**Abort is cooperative.** C contrast: `pthread_cancel` is asynchronous and unsafe. Python: `asyncio` raises `CancelledError` at `await` points. `AbortSignal` is cooperative: nothing happens unless you pass it on or check it. A tool that ignores its signal keeps going, and the loop waits for it. With a test tool that sleeps 1.5 seconds without looking at the signal, an abort after 100 ms still took 1502 ms to come back. Every tool you write must hand the signal to whatever it waits on.
+Day 3 said that cancelling is a request, not a command, and promised that today would measure what that costs. Abort is cooperative: nothing happens unless the code doing the waiting passes the signal on or checks it. A tool that ignores its signal keeps going, and the loop waits for it. Here are two pieces of work that each take 1.5 seconds, aborted after 100 ms. One ignores the signal, and the other hands it to the thing it waits on:
+
+```js run
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function abortableDelay(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    }, { once: true });
+  });
+}
+
+async function ignoresSignal(signal) { await delay(1500); }          // ✗ never looks at it
+async function listens(signal) { await abortableDelay(1500, signal); } // ✓ passes it on
+
+for (const work of [ignoresSignal, listens]) {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 100);
+  const start = Date.now();
+  try { await work(controller.signal); } catch { /* the AbortError */ }
+  console.log(`${work.name}: back after ${Date.now() - start} ms`);
+}
+// → ignoresSignal: back after 1501 ms
+// → listens: back after 102 ms
+```
+
+The abort fired at 100 ms in both cases. The difference is entirely in whether the work was listening. The reference loop shows the same thing: with a test tool that sleeps 1.5 seconds without looking at the signal, an abort after 100 ms still took 1502 ms to come back. So every tool you write must hand the signal to whatever it waits on.
+
+C contrast: `pthread_cancel` is asynchronous and unsafe, because it can stop a thread anywhere. Python contrast: `asyncio` raises `CancelledError` into a task at its next `await`, from outside. In JavaScript, the work has to opt in.
 
 ### 2. Abort is a result
 
-**`run()` never throws because the user pressed Ctrl+C.** It **returns** `{ aborted: true, turns, toolCalls, usage, newMessages, response }` and never throws `AbortError` to its caller. Catch it at the provider call: `if (isAbortError(err) || signal?.aborted) return result({ aborted: true })`. Check again at the top of each turn. `maxTurns` gives `aborted: false` with a `warning`; only abort gives `aborted: true`.
+Once the signal reaches everything, the next question is what `run()` gives back when it fires. The answer is the most important rule of the day: `run()` never throws because the user pressed Ctrl+C. It **returns** `{ aborted: true, turns, toolCalls, usage, newMessages, response }` and never throws `AbortError` to its caller.
+
+The loop has to notice the abort in two different situations, and they need two different kinds of check:
+- **While it's waiting on something that listens**, the abort arrives as a rejection. The provider's `fetch` rejects with an `AbortError`, so catch it at the provider call: `if (isAbortError(err) || signal?.aborted) return result({ aborted: true })`. The `|| signal?.aborted` is there because some code fails with an error of a different name when it's interrupted. If the signal has fired, the run was aborted, whatever the error says.
+- **Between steps**, nothing is waiting, so nothing rejects. A Ctrl+C that lands just after the model answered won't throw anywhere. The loop has to look: check `signal?.aborted` at the top of each turn, and before each tool call.
+
+`maxTurns` gives `aborted: false` with a `warning`. Only abort gives `aborted: true`.
 
 With a scripted model that takes five seconds to answer, and an abort after 50 ms, the reference loop returns in 51 ms with:
 
@@ -42,7 +83,7 @@ With a scripted model that takes five seconds to answer, and an abort after 50 m
   newMessages: [{ role: 'user', … }], usage: { … } }
 ```
 
-**A run can end in four ways, and the caller can tell them apart:**
+A run can end in four ways, and the caller can tell them apart:
 
 | How it ended | `run()` | `aborted` | `warning` |
 |---|---|---|---|
@@ -55,7 +96,7 @@ A **real** provider failure (server down) is different: it propagates as a `Prov
 
 ### 3. Abort must not corrupt history
 
-**The tool-pair invariant survives Ctrl+C.** The model asked for three tools and you aborted during the first. The first returns `"bash aborted"` (or `[killed: run aborted]`). The other two each get `{ isError: true, content: 'Skipped: run aborted' }`. The assistant message plus three results is still a valid tool pair.
+Returning cleanly isn't enough if what's left behind is broken. The tool-pair invariant (Day 12) has to survive Ctrl+C. Say the model asked for three tools and you aborted during the first. The first returns `"bash aborted"` (or `[killed: run aborted]`). The other two each get `{ isError: true, content: 'Skipped: run aborted' }`. The assistant message plus three results is still a valid tool pair.
 
 Measured on the reference loop, with a real `sleep 30` as the first call and an abort after 300 ms (the run returned in 303 ms, and no `sleep` was left):
 
@@ -72,7 +113,7 @@ The next run starts from a valid history, and the model can see that its calls w
 
 ### 4. `ScriptedProvider`: the seam made honest
 
-**A fake model that plays a script.** On Day 12, a test faked the provider with `{ chat: async () => replies.shift() }`. That works, but every test rebuilds it, and it can't fake a slow model or a failing one. `ScriptedProvider` is that idea grown into a real class:
+To test all of this without a real model, you need a fake one, and a good one. On Day 12, a test faked the provider with `{ chat: async () => replies.shift() }`. That works, but every test rebuilds it, and it can't fake a slow model or a failing one. `ScriptedProvider` is that idea grown into a real class, a fake model that plays a script:
 
 ```js
 const provider = new ScriptedProvider([
@@ -96,13 +137,13 @@ It implements the provider interface, so the loop can't tell it from Ollama. Tes
 
 ### 5. Signal patterns worth knowing
 
-**Four patterns cover nearly everything:**
+Four patterns cover nearly everything:
 - `signal.throwIfAborted()` at synchronous checkpoints.
 - `AbortSignal.timeout(ms)` gives per-request deadlines.
 - `AbortSignal.any([user, timeout])` combines reasons; `signal.reason` tells you which fired.
 - A promise you stop waiting for still needs a handler. If an abort makes you give up on work that later rejects, Node reports an unhandled rejection and exits (Day 3).
 
-The last two in code:
+The third in code:
 
 ```js
 const user = new AbortController();
@@ -111,15 +152,35 @@ const signal = AbortSignal.any([user.signal, AbortSignal.timeout(60_000)]);
 signal.reason.name   // → 'TimeoutError' if the deadline fired; 'AbortError' if the user aborted
 ```
 
-`Promise.race` is safe here, because it attaches a handler to every promise you give it, so a loser that rejects later is still handled. The danger is a promise you started and then simply stopped awaiting:
+The fourth needs more care, because it's easy to get almost right. `Promise.race` is safe: it attaches a handler to every promise you give it, so a loser that rejects later is still handled. The danger is a promise you start and then stop waiting for, typically because an abort made you return early. Here a run starts some slow work, the user aborts at 10 ms, and the run returns. At 30 ms, the abandoned work fails:
 
 ```js
-const work = doSlowThing();       // started, may reject later
-await abortedPromise;             // ✗ we stop waiting for work: if it rejects, Node exits
-work.catch(() => {});             // ✓ a promise we abandon gets an empty handler
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const doSlowThing = async () => { await delay(30); throw new Error('slow thing failed'); };
+const stopAfter = (ms) => new Promise((_, reject) =>
+  setTimeout(() => reject(new DOMException('aborted', 'AbortError')), ms));
+
+async function run({ handleEarly }) {
+  const work = doSlowThing();                     // started now; rejects at 30 ms
+  if (handleEarly) work.catch(() => {});          // ✓ handled from the start
+  try {
+    await stopAfter(10);                          // the user aborts at 10 ms…
+  } catch {
+    return 'aborted';                             // …so we stop waiting for work
+  }
+  return await work;
+}
+
+// run one of these at a time:
+await run({ handleEarly: false });   // → 'aborted', then at 30 ms Node exits: slow thing failed
+await run({ handleEarly: true });    // → 'aborted', and the program carries on
 ```
 
+Without the early handler, `run` returns `'aborted'` and the caller carries on, and 20 ms later the whole process dies of an error nobody was waiting for. The fix is to attach the handler *as soon as the work starts*, before any `await` that might lead you to return. A `.catch` written further down never runs if you return before reaching it.
+
 ## Build
+
+First the signal goes through the loop, then the fake model that lets you test it. Then the course tests and one scenario of your own, then a live abort with a real model. The day ends with Checkpoint 1, a list of everything the engine must now do.
 
 **Files today:** `src/agent/agent-loop.js`, `src/provider/scripted.js`, `tests/agent-loop-e2e.test.js`, `scripts/smoke-loop.js` and `notes/day-13.md`.
 
@@ -192,7 +253,7 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ah-e2e-'));
 t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 ```
 
-Script one reply per provider call the loop will make. A write, a read and an answer are three turns, so three steps.
+Script one reply per provider call the loop will make. A write, a read and an answer are three turns, so three steps. Use a function step for the answer if you want it to quote what the read returned: that proves the tool's result really reached the model.
 
 ### 13.5 Live abort — Core
 
@@ -202,7 +263,7 @@ A cancelled `rl.question` rejects with an `AbortError` (Day 3). In the approver,
 
 ### 13.6 Checkpoint 1 — Core
 
-**All must be true** ([README checkpoints](README.md#checkpoints)). Fix anything red, using [Buffer 1](buffer-1.md) if you need it:
+Two weeks of work meet here. Each item below is something a later day assumes, so a red item now becomes a confusing bug next week. **All must be true** ([README checkpoints](README.md#checkpoints)). Fix anything red, using [Buffer 1](buffer-1.md) if you need it:
 
 - [ ] `node --test` green with Ollama **stopped**: every course test from Days 3–13, plus yours
 - [ ] Tool turn → text turn works; the next call sees the whole tool pair
@@ -221,6 +282,12 @@ Commit `day-13: abort + scripted provider — checkpoint 1`.
 Give the provider a per-request deadline: `AbortSignal.any([opts.signal, AbortSignal.timeout(60_000)])`. Use `signal.reason?.name` to tell `TimeoutError` (report "the model took too long") from a user abort (stay quiet). Add a test with a 50 ms deadline on a `delayMs: 5000` step.
 
 ## Check
+
+That's Checkpoint 1: a working engine. One signal reaches the model call, every tool and the gaps between them, and an abort comes back as a result, with the tool pairs still whole and no process left behind. A real failure still throws, so someone sees it. `ScriptedProvider` can play any model, slow or broken, so the whole engine is proven with Ollama switched off, and every later day builds its tests on it.
+
+Next comes [Buffer 1](buffer-1.md), a day to catch up, repair or go further, and then Day 14 starts week 3 by connecting the engine to a real interface through events.
+
+Before you move on, check:
 
 - [ ] Checkpoint 1 list fully ticked
 - [ ] Commit `day-13: … checkpoint 1`
@@ -256,10 +323,10 @@ Something still holds the event loop: a timer you didn't clear, or a child you d
 
 ## Common mistakes
 
-- Passing the signal to `fetch` but not to `spawn`.
-- Re-throwing `AbortError` out of `run()`.
-- A test that quietly calls the real Ollama.
-- Abandoning a promise without a handler when an abort makes you stop waiting for it.
+- **Passing the signal to `fetch` but not to `spawn`.** The model call stops, but the command keeps running, and the loop waits for it.
+- **Re-throwing `AbortError` out of `run()`.** Every caller then needs a `try/catch` for a user's ordinary choice, and the partial history is lost.
+- **A test that quietly calls the real Ollama.** It passes on your machine and fails anywhere Ollama is off, and it proves the model, not the loop. Run the suite with Ollama stopped.
+- **Abandoning a promise without a handler when an abort makes you stop waiting for it.** When it rejects later, Node exits with an error nobody was waiting for. Attach the handler as soon as the work starts (concept 5).
 
 ## Self-check
 
