@@ -18,11 +18,15 @@ $ node --test tests/event-protocol.test.js
 ℹ tests 9  ℹ pass 9  ℹ fail 0
 ```
 
-You have a written design (`docs/architecture.md`) for the real harness, and its heart is **executable**: a state machine that decides whether a sequence of loop events could have come from a correct loop. On Day 14 you run your real loop's traces through it. Tomorrow you start building.
+Those nine passing tests are the sharpest part of a design you wrote today. Most of the design lives in `docs/architecture.md` as prose and diagrams, but its heart is **executable**: a state machine that decides whether a sequence of loop events could have come from a correct loop. On Day 14 you run your real loop's traces through it. Tomorrow you start building.
 
 ## Why it matters
 
-Your toy works, but you have already noticed what it lacks. Today you read one serious, open-source harness, **Pi**, and decide what yours will look like *before* you write it. Reading a real codebase types-first is a core professional skill. So is deciding what to copy and what not to.
+For five days you've built a toy, and by now you've noticed what it lacks. It has one tool, no memory between sessions, no way to plug anything in, and a loop that talks straight to the terminal. Next week you start on the real harness, and this is the cheapest moment to decide what it should look like: before you've written it, while changing your mind costs a paragraph instead of a rewrite.
+
+So today you read before you build. You'll read one serious, open-source harness, **Pi**, and write down a design of your own. Both are professional skills worth practising on purpose. Reading a large codebase you didn't write, quickly and *types first*, is most of what joining a new project is like. Deciding what to copy from it, and where to differ on purpose, is most of what design is.
+
+The day ends with something you can run: a small state machine that checks whether a sequence of loop events could have come from a correct loop. It's your design's sharpest rule, written as a test, and on Day 14 your real loop has to pass it.
 
 > **Behind?** Day 6 is lighter on purpose: it's the week's slack. If any check from Days 1–5 is red, fix it first: Day 7 builds on the Day 4–5 modules, not on today's notes.
 
@@ -30,7 +34,7 @@ Your toy works, but you have already noticed what it lacks. Today you read one s
 
 ### 1. Read the type surface first
 
-**Types are the map; function bodies are the terrain.** When you open an unfamiliar codebase, don't start reading functions from the top. Start with what the package *offers* and what its data *looks like*. That means its entry file (often `index.ts` or `index.js`), which lists what it exports, and the types those exports use. Once you know the shapes, every function body is easier to read, because you know what goes in and what comes out. When a package ships `.d.ts` files (type declarations), read those first. Pi ships TypeScript sources, so its `index.ts` plays that role.
+**Types are the map; function bodies are the terrain.** When you open an unfamiliar codebase, the temptation is to start reading functions from the top. Resist it. Start with what the package *offers* and what its data *looks like*. That means its entry file (often `index.ts` or `index.js`), which lists what it exports, and the types those exports use. Once you know the shapes, every function body is easier to read, because you already know what goes in and what comes out. When a package ships `.d.ts` files (type declarations), read those first. Pi ships TypeScript sources, so its `index.ts` plays that role.
 
 Pi's agent package starts like this:
 
@@ -46,7 +50,29 @@ export * from "./types.ts";
 
 `export * from` re-exports everything another file exports. So this file is a table of contents: the agent, the loop and the types are the three places to read.
 
-**You can already read most TypeScript.** TypeScript is JavaScript with type annotations, and the types use the same language as the JSDoc you wrote on Day 2. A few extra pieces of syntax cover nearly everything you'll meet in Pi. This is Pi's `AgentEvent`, shortened:
+**You can already read most TypeScript.** TypeScript is JavaScript with type annotations, and the types use the same language as the JSDoc you wrote on Day 2. A few extra pieces of syntax cover nearly everything you'll meet in Pi. Here is the most important one, on a small example first:
+
+```ts
+type Shape =
+  | { kind: "circle"; radius: number }
+  | { kind: "square"; side: number };
+
+function area(shape: Shape): number {
+  if (shape.kind === "circle") return Math.PI * shape.radius ** 2;   // here, shape is a circle
+  return shape.side ** 2;                                              // here, it must be a square
+}
+
+area({ kind: "square", side: 3 });       // fine
+area({ kind: "triangle", side: 3 });
+// ✗ Type '"triangle"' is not assignable to type '"square" | "circle"'.
+```
+
+How to read it:
+- **`type Shape = A | B`** is a *union*: a `Shape` is exactly one of those shapes. Each one has a `kind` field holding a fixed string, so code can check `shape.kind` to find out which one it has. After the `if`, TypeScript knows which shape it's looking at, so `shape.radius` is allowed in one branch and `shape.side` in the other. A union like this, told apart by one field, is called a *discriminated union*.
+- **`{ kind: "circle"; radius: number }`** is an object type. TypeScript separates the fields with `;` where JSDoc uses `,`. In JSDoc, the same type is `{ kind: 'circle', radius: number }`.
+- **`shape: Shape` after a parameter** gives the parameter's type, and **`): number`** after the parameter list gives the return type.
+
+Now Pi's `AgentEvent`, shortened, reads the same way:
 
 ```ts
 export type AgentEvent =
@@ -57,11 +83,7 @@ export type AgentEvent =
   | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: any; isError: boolean };
 ```
 
-How to read it:
-- **`type AgentEvent = A | B | C`** is a *union*: an `AgentEvent` is exactly one of those shapes. Each shape has a `type` field with a fixed string, so code can check `event.type` to know which one it holds.
-- **`{ toolName: string; isError: boolean }`** is an object type. TypeScript separates the fields with `;` where JSDoc uses `,`.
-- **`AgentMessage[]`** is an array of `AgentMessage`, and **`any`** means "not checked".
-- **`name: Type` after a parameter** gives the parameter's type, and **`): Type`** after the parameter list gives the return type.
+It's a discriminated union on `type`: an `AgentEvent` is one of a list of shapes, and code checks `event.type` to see which. Two more pieces appear here. **`AgentMessage[]`** is an array of `AgentMessage`, and **`any`** means "not checked".
 
 Put together, here is Pi's `subscribe` method, with its body left out:
 
@@ -69,11 +91,13 @@ Put together, here is Pi's `subscribe` method, with its body left out:
 subscribe(listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void
 ```
 
-From the types alone: `subscribe` takes a listener function. The listener receives an event and an abort signal, and it may return a promise. `subscribe` returns a function, and calling that function unsubscribes. You learned the whole API without reading a line of the implementation. You'll also meet `interface` (another way to name an object type), `?` after a field name (optional), and `<T>` (a type parameter, like a C++ template argument).
+Read it from the outside in. `subscribe` takes one parameter, `listener`, and returns `() => void`: a function that takes nothing and returns nothing. The listener itself is a function that receives an event and an abort signal, and may return a promise (`Promise<void> | void`). So: you hand `subscribe` a listener, it calls your listener with every event, and the function it hands back unsubscribes you. You've learned the whole API without reading a line of the implementation.
+
+You'll also meet `interface` (another way to name an object type), `?` after a field name (optional), and `<T>` (a type parameter, like a C++ template argument).
 
 ### 2. Where things live in Pi
 
-The vendored copy is `reference/pi` (package version 0.80.3). Paths are relative to it:
+A big repository rewards a plan. You won't read all of Pi, and you don't need to. Today you need its shapes, its event order, and a few files that show its decisions. The vendored copy is `reference/pi` (package version 0.80.3). Paths are relative to it:
 
 | What | Where |
 |---|---|
@@ -86,15 +110,15 @@ The vendored copy is `reference/pi` (package version 0.80.3). Paths are relative
 | CLI arguments (`Args`, `parseArgs`) | `packages/coding-agent/src/cli/args.ts` |
 | Terminal UI library | `packages/tui/src/` (post-course) |
 
-`packages/ai`, `packages/orchestrator` and `packages/pods` exist too. None of them is the loop, so skip them. A big repository rewards a plan: read the files in the table, in 6.2's order, and leave everything else for later.
+`packages/ai`, `packages/orchestrator` and `packages/pods` exist too. None of them is the loop, so skip them. Read the files in the table, in 6.2's order, and leave everything else for later.
 
 ### 3. Vocabulary differences (know them before you read)
 
-**Pi and this course name events differently.** Pi's `AgentEvent` includes `agent_start`/`agent_end`, `turn_start`/`turn_end`, `message_start`/`message_update`/`message_end` and `tool_execution_start`/`_update`/`_end`. A **different** union, in `packages/agent/src/harness/types.ts`, has hook events named `tool_call` and `tool_result`. Don't merge the two lists.
+**Pi and this course name events differently.** That's normal: every harness picks its own words for the same few moments. But it will trip you up if you don't expect it. Pi's `AgentEvent` includes `agent_start`/`agent_end`, `turn_start`/`turn_end`, `message_start`/`message_update`/`message_end` and `tool_execution_start`/`_update`/`_end`. A **different** union, in `packages/agent/src/harness/types.ts`, has hook events named `tool_call` and `tool_result`. Don't merge the two lists.
 
 Ours ([canonical events](README.md#canonical-event-list)) keeps `agent_start`/`agent_end` and `turn_start`/`turn_end`. It streams `text_delta` and `thinking_delta` instead of `message_update`, splits a tool into `tool_call_start` / `tool_call_end` / `tool_result`, and adds approval events.
 
-**The same run, in both vocabularies.** Here is a text-only answer. Pi also announces each whole message, including your prompt, with a start and an end; ours streams the pieces and leaves your message to the UI:
+**The same run, in both vocabularies.** Here is a text-only answer. Pi also announces each whole message, including your prompt, with a start and an end. Ours streams the pieces and leaves your message to the UI:
 
 ```
 Pi (agent-loop.ts)                    ours (Day 12's loop)
@@ -113,11 +137,13 @@ Translate while you read, but never "fix" our list to match Pi's. Other days, th
 
 ### 4. What we copy from Pi, and where we differ on purpose
 
+Copying a good design is not a weakness. Most of what makes Pi work, we keep. The interesting part is the handful of places where we choose differently, and being able to say *why*.
+
 **The same as Pi:**
-- **Sessions are an append-only tree** in a JSONL file: every entry has an `id` and a `parentId`, and the conversation the model sees is the path from the root to the current leaf. Pi's own comment above `class SessionManager` in `session-manager.ts` says it in one paragraph. You build this on Day 17, and compaction uses it on Day 25.
+- **Sessions are an append-only tree** in a JSONL file. Every entry has an `id` and a `parentId`, and the conversation the model sees is the path from the root to the current leaf. Pi's own comment above `class SessionManager` in `session-manager.ts` says it in one paragraph. You build this on Day 17, and compaction uses it on Day 25.
 - **A run and its turns have lifecycle events** (`agent_start`/`agent_end`, `turn_start`/`turn_end`), and tool results are messages of their own.
 
-"Append-only tree" sounds abstract, so here's a picture. Each entry points at its parent. Going back to an earlier point and asking again adds a new branch; nothing is ever rewritten:
+"Append-only tree" sounds abstract, so here's a picture. Each entry points at its parent. Going back to an earlier point and asking again adds a new branch, and nothing is ever rewritten:
 
 ```
 a ← b ← c ← d          the conversation so far: a, b, c, d
@@ -135,18 +161,76 @@ leaf = e   →   the model sees a, b, c, e      (d stays in the file, on its own
 | **Asking before acting** | The core runs tools without asking. A `tool_call` hook (`beforeToolCall`) can block a call with a reason; that is how an extension would add a check. | An approval gate with permission rules in the core, **failing closed**: no approver means deny (Days 12, 20). | This course's learners run small local models on their own machines, so the safe default is built in, not bolted on. |
 | **MCP** | Left out deliberately (see Mario Zechner's post). | Added on Day 23. | MCP is now the standard way to plug tools into harnesses. Both choices are defensible: note where you stand. |
 
-**The first row is the deepest difference, so here it is in code.** Pi's `Agent` does, in effect, the first of these; our bus does the second:
+**The first row is the deepest difference, so here it is in code.** Pi's `Agent` does, in effect, the first of these, and our bus does the second:
 
 ```js
 for (const listener of listeners) await listener(event);   // Pi: the next turn waits for every listener
 for (const listener of listeners) listener(event);         // ours: emit returns at once; nothing waits
 ```
 
-With the first, a listener that saves the session to disk is guaranteed to finish before the next event, but a listener that hangs hangs the agent. With the second, no listener can slow the loop down, so the loop's timing never depends on who is listening. The price is that an event can't carry an *answer* back. Day 20 builds approval as a request/response on top of the bus for exactly that reason.
+The two lines differ by one word, and that word changes *when* everything happens. Here they are with two listeners: a slow one that saves the session, and a quick one that draws the screen. Watch where `loop: next turn` lands in each case:
+
+```js run
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const listeners = [
+  async (event) => {                         // saves the session: slow
+    console.log(`saver: start saving after ${event}`);
+    await delay(50);
+    console.log(`saver: saved after ${event}`);
+  },
+  (event) => console.log(`ui: draw ${event}`),
+];
+
+async function emitAwaited(event) {          // Pi
+  for (const listener of listeners) await listener(event);
+}
+
+function emitAndForget(event) {              // ours
+  for (const listener of listeners) listener(event);
+}
+
+console.log('--- awaited');
+await emitAwaited('turn_end');
+console.log('loop: next turn');
+
+console.log('--- fire-and-forget');
+emitAndForget('turn_end');
+console.log('loop: next turn');
+// → --- awaited
+// → saver: start saving after turn_end
+// → saver: saved after turn_end
+// → ui: draw turn_end
+// → loop: next turn
+// → --- fire-and-forget
+// → saver: start saving after turn_end
+// → ui: draw turn_end
+// → loop: next turn
+// → saver: saved after turn_end
+```
+
+With `await`, everything happens in a strict order. The save finishes before the UI even hears the event, and the loop doesn't move on until both are done. That's a real guarantee: the session on disk is always up to date before the next turn starts. But it means the loop's speed is the speed of its slowest listener, and a listener that never settles stops the agent for good.
+
+Without `await`, each listener runs only up to its first `await` (Day 3: an `async` function returns at its first pause), and `emit` moves on. The UI draws at once, the loop carries on at once, and the save finishes 50 ms later, *after* the next turn has begun. No listener can slow the loop down, so the loop's timing never depends on who is listening.
+
+That freedom has two prices. First, an event can't carry an *answer* back, because nobody waits for one. Day 20 builds approval as a request/response on top of the bus for exactly that reason. Second, the promise an `async` listener returns is dropped on the floor, and as Day 3 showed, a dropped promise that rejects crashes Node. So the bus you build on Day 14 attaches a handler to any promise a listener returns, and reports its failure instead of crashing.
 
 ### 5. Design vocabulary
 
-**A state machine** lists the *states* a system can be in, the *events* that can happen, and the *transitions*: which event, in which state, leads to which next state. Any event that has no transition from the current state is **illegal**, and the machine rejects it loudly. You have already built one without the name. Day 3's REPL is a state machine:
+Before you write a design, a few words make it easier to say precisely what you mean.
+
+**A state machine** lists the *states* a system can be in, the *events* that can happen, and the *transitions*: which event, in which state, leads to which next state. Any event that has no transition from the current state is **illegal**, and the machine rejects it loudly. A door is the classic example:
+
+| State | Event | Next state |
+|---|---|---|
+| `Closed` | open | `Open` |
+| `Closed` | lock | `Locked` |
+| `Open` | close | `Closed` |
+| `Locked` | unlock | `Closed` |
+
+There's no row for *open* while `Locked`, so a locked door can't be opened, and there's no row for *lock* while `Open`, so an open door can't be locked. The rules of the system are the table, and anything not in the table is a mistake.
+
+You have already built one without the name. Day 3's REPL is a state machine:
 
 | State | Event | Next state |
 |---|---|---|
@@ -179,7 +263,7 @@ The diagrams on this page are written in **Mermaid**, a text format for diagrams
 
 ### 6. The loop's event protocol
 
-Day 12's loop emits events in this order (see its pseudocode): `agent_start`, then for each turn `turn_start`, the model's streamed deltas, then for each tool call `tool_call_start` → (approval) → `tool_call_end` → `tool_result`, then `turn_end`; finally `agent_end`. As a state machine:
+Now we can put those words together and describe the real loop you'll build next week. Day 12's loop emits events in this order (see its pseudocode): `agent_start`, then for each turn `turn_start`, the model's streamed deltas, then for each tool call `tool_call_start` → (approval) → `tool_call_end` → `tool_result`, then `turn_end`; finally `agent_end`. As a state machine:
 
 ```mermaid
 stateDiagram-v2
@@ -219,21 +303,25 @@ stateDiagram-v2
 The trace ends back in `Idle`, so it's legal. A trace with a `tool_result` *before* its `tool_call_end` is not. The call is answered before it finished, and the machine stops at that event: `illegal transition: BetweenTools --tool_call_end-->`.
 
 Three rules complete it:
-1. **`agent_end` may come from any state except `Idle`.** It fires in the loop's `finally`, so an answer, `maxTurns`, an abort and a thrown error all end the run the same way. That's why there is no `Stopped` state: `maxTurns` is a *reason* for `agent_end`, not a place. A run that throws in the middle of a tool still ends `RunningTool --agent_end--> Idle`.
+1. **`agent_end` may come from any state except `Idle`.** It fires in the loop's `finally` (Day 5), so an answer, `maxTurns`, an abort and a thrown error all end the run the same way. That's why there is no `Stopped` state: `maxTurns` is a *reason* for `agent_end`, not a place. A run that throws in the middle of a tool still ends `RunningTool --agent_end--> Idle`.
 2. **A skipped call has a `tool_result` but no start or end.** After an abort, the loop still answers every call (the tool-pair invariant from Day 3) without running it. That's what the two "skipped by abort" arrows in the diagram are for.
 3. **Events outside the loop are ignored** by this machine: `session_*`, `error`, `compaction`, `command_run`, and the UI's events. A `session_start` in the middle of a trace is skipped, not rejected. The machine checks the loop's story, and other components tell their own.
 
+Why go to this trouble? Because the bugs that matter most in a loop are bugs of *order*: a result recorded before its call finished, a run that never announces its end, a turn that starts while a tool is still running. Ordinary tests check values. This machine checks order, and it can check every trace your loop ever produces.
+
 ## Build
+
+Today's build is mostly reading and writing prose. Read first (6.1 and 6.2), so you have Pi's decisions in front of you. Then write your own design (6.3), and finish by turning its sharpest rule into a test (6.4).
 
 **Files today:** `notes/day-06.md`, `docs/architecture.md`, `tests/helpers/event-protocol.js` and `tests/event-protocol.test.js`.
 
 ### 6.1 Read Pi's design essay — Core
 
-Read Mario Zechner's [What I learned building an opinionated and minimal coding agent](https://mariozechner.at/posts/2025-11-30-pi-coding-agent), the reasons Pi looks the way it does. It's long, so skim for the decisions: tools, permissions, MCP and context. In `notes/day-06.md`, write three ideas you want to keep and one you disagree with.
+Read Mario Zechner's [What I learned building an opinionated and minimal coding agent](https://mariozechner.at/posts/2025-11-30-pi-coding-agent), the reasons Pi looks the way it does. It's long, so skim for the decisions: tools, permissions, MCP and context. In `notes/day-06.md`, write three ideas you want to keep and one you disagree with. Disagreeing is part of the exercise. A design you can't argue with is one you haven't understood yet.
 
 ### 6.2 Map Pi's agent package — Core
 
-Read these, in this order:
+Read these, in this order. It's concept 1's method: the table of contents first, then the types, then just enough code to follow one turn.
 1. `packages/agent/src/index.ts`;
 2. the `AgentEvent` union in `types.ts`;
 3. in `agent.ts`, `subscribe()` and the comment above it;
@@ -255,6 +343,8 @@ In your notes, do two things:
 - **Fill in an event divergence table** with three columns: *Pi `AgentEvent`*, *our canonical event(s)*, and *why different*. Fill in at least the rows `turn_start`, `message_update`, `tool_execution_start`, `tool_execution_update` and `tool_execution_end`. Add a separate, clearly labelled row for the hook event `tool_call`. Your "why" for `tool_execution_end` should explain why we keep `tool_result` as its own record: the UI shows it, and the [tool-pair invariant](README.md#tool-pair-history-invariant) stores it.
 
 ### 6.3 `docs/architecture.md`, first draft — Core
+
+This is a first draft, and it's allowed to be rough. Its job is to make decisions visible, so that later days can follow them or change them on purpose.
 
 1. **Folders.** Copy the [target tree](README.md#project-structure-target) and write one or two sentences of rationale for each `src/` folder. Say what depends on what, and what must **never** depend on the UI: the loop, the tools and the sessions.
 2. **Event flow.** Add this diagram and adjust it to your taste:
@@ -338,6 +428,12 @@ Read Pi's `bash.ts` past the top. How does it handle output size, timeouts and t
 
 ## Check
 
+You've read a real harness the way professionals read code, from its types inward, and you know where yours will follow it and where it won't. Above all, you've chosen a bus that never waits on its listeners, and an approval gate built into the core. You have a design on paper, and its most important rule, the order of the loop's events, is a test that any loop can be run against.
+
+Tomorrow the real harness begins. Day 7 starts at the bottom, with the exact shapes of the messages that travel between your code and the model.
+
+Before you move on, check:
+
 - [ ] `notes/day-06.md`: essay takeaways, the Pi call graph and the divergence table
 - [ ] `docs/architecture.md` draft: folder rationale, event flow, approval pause, busy policy, the toy-to-harness table, and Pi copy/differ notes
 - [ ] `node --test tests/event-protocol.test.js` passes
@@ -379,11 +475,11 @@ The fence must be ```` ```mermaid ````. GitHub renders it. Many editors' Markdow
 
 ## Common mistakes
 
-- Copying Pi's vocabulary into your design "because it was right there".
-- Reading function bodies first and drowning in detail.
-- Designing the pretty terminal UI (themes, raw mode) instead of the loop, its events and its invariants.
-- Writing traces for the happy path only. The abort and error traces are the ones that catch bugs.
-- Treating `agent_end` like any other transition. A run that ends by `maxTurns` or an error, mid-tool, then looks illegal.
+- **Copying Pi's vocabulary into your design "because it was right there".** The course's tests, other days and the UI all use our event names, so a borrowed name breaks things far from where you wrote it.
+- **Reading function bodies first and drowning in detail.** Without the types, you don't know what any function is for, so every line looks equally important.
+- **Designing the pretty terminal UI (themes, raw mode) instead of the loop, its events and its invariants.** The UI is the easiest part to change later, and the loop is the hardest.
+- **Writing traces for the happy path only.** The abort and error traces are the ones that catch bugs, because those are the paths a loop gets wrong.
+- **Treating `agent_end` like any other transition.** A run that ends by `maxTurns` or an error, mid-tool, then looks illegal, though it's exactly what a correct loop does.
 
 ## Self-check
 
