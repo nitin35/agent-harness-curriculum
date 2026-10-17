@@ -14,16 +14,20 @@ answer (2 turns, aborted=false):
 There are **5** files in the "toy" folder.
 ```
 
-This is your **real** loop, not the toy. It drives your provider, your registry and your jailed tools, and nothing dangerous runs without your `y`.
+Look at the three marks. `→` is the model asking for a tool, `allow …?` is the loop stopping to ask you, and `←` is the tool's result going back. This is your **real** loop, not the toy. It drives your provider, your registry and your jailed tools, and nothing dangerous runs without your `y`.
 
 ## Why it matters
 
-Everything so far was parts. `AgentLoop` is the engine that runs them, and it has to be boringly correct:
+For four days you've built parts: a provider that talks to the model, a registry that holds tools, a jail, and tools that read, write, edit and run commands. Nothing yet connects them. Today you write the engine that does.
+
+`AgentLoop` is that engine, and it has to be boringly correct:
 - tools are looked up fresh every turn;
 - every tool call gets exactly one result, in order;
 - runaway loops stop;
 - bad tool calls become results the model can learn from;
 - **risky tools are denied unless someone approves them.**
+
+Each of those is a bug that some harness, somewhere, has shipped. A loop that caches its tools can't see one added later. A loop that answers two calls out of three sends the model a history the server rejects. A loop whose approval check defaults to "yes" runs shell commands nobody saw. The loop is short, but it's the code every other day leans on, so it's worth writing slowly.
 
 This is a heavier day, but you know its shape already: it's the toy's `runTurns` from Days 2–3, grown up.
 
@@ -31,7 +35,7 @@ This is a heavier day, but you know its shape already: it's the toy's `runTurns`
 
 ### 1. Write the pseudocode first
 
-**Plan the loop in words before you write it.** The loop has many exit paths and an order that matters, and pseudocode lets you check both before any code exists:
+The loop has many exit paths and an order that matters, and pseudocode lets you check both before any code exists:
 
 ```
 run(userMessage, history, { signal }):
@@ -81,9 +85,11 @@ result.newMessages
 
 The events, in order: `agent_start → turn_start → tool_call_start → tool_call_end → tool_result → turn_end → turn_start → turn_end → agent_end`. That's a legal walk through Day 6's state machine.
 
+The pseudocode hides several rules inside single lines. The rest of this section takes them one at a time, starting with the one about order.
+
 ### 2. The tool-pair invariant
 
-**A call and its results are one unit.** An assistant message with `toolCalls` is followed by **one result per call, in the same order**, before the provider is called again. Tomorrow, abort keeps this true as well ([contract](README.md#tool-pair-history-invariant)).
+A call and its results are one unit. An assistant message with `toolCalls` is followed by **one result per call, in the same order**, before the provider is called again. Tomorrow, abort keeps this true as well ([contract](README.md#tool-pair-history-invariant)).
 
 ```
 ✓  assistant { toolCalls: [call_1, call_2] }
@@ -100,7 +106,7 @@ Hosted APIs reject the second history outright, and a local model is left guessi
 
 ### 3. Fresh tools every call
 
-**Ask the registry right before every provider call.** Call `registry.toProviderTools(enabledTools)` **right before every** provider call, never once in the constructor. On Day 22, extensions add tools while the program runs, and a cached list is stale by construction.
+The pseudocode calls `registry.toProviderTools()` inside the turn loop, and that placement is deliberate. Call `registry.toProviderTools(enabledTools)` **right before every** provider call, never once in the constructor. On Day 22, extensions add tools while the program runs, and a cached list is stale by construction.
 
 ```js
 this.tools = registry.toProviderTools();            // ✗ in the constructor: a snapshot that goes stale
@@ -112,7 +118,7 @@ The call costs almost nothing, and "why can't the model see my new tool?" is a m
 
 ### 4. `executeTool` never throws
 
-**Every way a tool call can go wrong becomes a result.** The model can then read what happened and try again, and the run carries on. Each step that can fail becomes a result:
+Another single line of the pseudocode, `r = executeTool(call)`, has to survive everything a model can get wrong. Every way a tool call can go wrong becomes a result, so the model can read what happened and try again, and the run carries on. Each step that can fail becomes a result:
 1. **An unknown tool, or one that isn't enabled:** `"Unknown tool 'fs_read'. Available tools: read, write, edit, bash."`
 2. **`call.parseError`, or `validateArguments` fails:** Day 9's malformed-arguments message, ending in *"Retry the call with corrected arguments."*
 3. **Approval:** see concept 5.
@@ -134,15 +140,15 @@ Listing the available tools in the first message matters: models correct a wrong
 
 ### 5. Approval: minimal today, fail closed always
 
-**Some tools must not run until a person says yes.** `AgentLoop` takes an optional `approve(call, tool, { signal })`. It resolves to `true`/`false`, or to `{ approved, reason?, by? }`.
+Some tools must not run until a person says yes. `AgentLoop` takes an optional `approve(call, tool, { signal })`. It resolves to `true`/`false`, or to `{ approved, reason?, by? }`.
 
 - `needsApproval` and `autoApprove` → run without asking (an explicit opt-in only).
 - `needsApproval` and **no `approve` function** → **deny**: `"Denied bash (approval required but no approver is attached…)"`.
 - Otherwise → ask. A denial is a normal tool result that the model can react to.
 
-**"Fail closed" means that when the gate can't get an answer, the answer is no.** A door lock that stays locked when the power fails is fail-closed. If the loop *allowed* tools whenever no approver was attached, then a test, a script or a misconfigured app would quietly run shell commands nobody approved. Denying costs at most a confused model; allowing can cost your files.
+The second rule is the important one. *Fail closed* means that when the gate can't get an answer, the answer is no. A door lock that stays locked when the power fails is fail-closed. If the loop *allowed* tools whenever no approver was attached, then a test, a script or a misconfigured app would quietly run shell commands nobody approved. Denying costs at most a confused model. Allowing can cost your files.
 
-**Who refused decides the wording.** A human "no" reads `User denied bash`. A refusal no human made (a rule, a mode, nobody to ask) reads `Denied bash (<reason>)`. The approver says which with `by: 'policy'`; anything else counts as the user's. Route on that field, never on the reason's text (Day 5): a policy whose reason happens to contain "aborted" is still a policy.
+Who refused decides the wording. A human "no" reads `User denied bash`. A refusal no human made (a rule, a mode, nobody to ask) reads `Denied bash (<reason>)`. The approver says which with `by: 'policy'`, and anything else counts as the user's. Route on that field, never on the reason's text (Day 5): a policy whose reason happens to contain "aborted" is still a policy.
 
 | The approver resolves to | The `bash` call's result |
 |---|---|
@@ -156,15 +162,43 @@ Today's approver is a three-line `readline` prompt in a script. Day 20 replaces 
 
 ### 6. Async state belongs in locals
 
-**Every `await` is a point where other code can run.** While one run waits for the model, timers fire, the UI reacts, and in principle a second run could start. So state that belongs to one run must live in that run's local variables, never in module-level variables shared by every run:
+The last rule isn't in the pseudocode at all, because it's about how the code is written rather than what it does. Every `await` is a point where other code can run (Day 3). While one run waits for the model, timers fire, the UI reacts, and in principle a second run could start. So state that belongs to one run must live in that run's local variables, never in module-level variables shared by every run.
 
-```js
-let turns = 0;                       // ✗ module level: two overlapping runs would share it
-async function run() {
-  turns = 0;
-  …
+Here is what goes wrong otherwise, on a small example. Two calls to the same function each count their own steps, once with a shared counter and once with a local one:
+
+```js run
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let steps = 0;                                   // ✗ module level: shared by every call
+async function walkShared(name, n) {
+  steps = 0;
+  for (let i = 0; i < n; i++) {
+    await delay(10);
+    steps++;
+  }
+  console.log(`shared: ${name} took ${steps} steps`);
 }
 
+async function walkLocal(name, n) {
+  let steps = 0;                                 // ✓ local: each call has its own
+  for (let i = 0; i < n; i++) {
+    await delay(10);
+    steps++;
+  }
+  console.log(`local:  ${name} took ${steps} steps`);
+}
+
+await Promise.all([walkShared('a', 3), walkShared('b', 5)]);
+await Promise.all([walkLocal('a', 3), walkLocal('b', 5)]);
+// → shared: a took 5 steps
+// → shared: b took 8 steps
+// → local:  a took 3 steps
+// → local:  b took 5 steps
+```
+
+With the shared counter, both calls reset the same `steps`, and then each one's `steps++` lands on the other's count at every `await`, so `a` reports 5 steps instead of 3. Nothing threw, and both answers are wrong. With a local `steps`, every call gets its own variable, and the `await`s don't matter. In the loop, that means `turn`, `newMessages`, the tool log and the usage totals are all locals of `run`:
+
+```js
 async run() {
   let turn = 0;                      // ✓ local: each call gets its own
   const newMessages = [];
@@ -172,7 +206,7 @@ async run() {
 }
 ```
 
-Keep loop state in local variables and the result object, never in module-level variables. Guard re-entry: if `run()` is called while it's already running, that's a programmer error, so throw `already running`. (On Day 15, the bridge *queues* input instead.)
+Keep loop state in local variables and the result object. Then guard re-entry. If `run()` is called while it's already running, that's a programmer error, so throw `already running`. (On Day 15, the bridge *queues* input instead.)
 
 ```js
 const first = loop.run('a');
@@ -180,9 +214,37 @@ await loop.run('b');
 // Error: AgentLoop.run() is already running — queue the message instead
 ```
 
-Reset the running flag in the same `finally` that emits `agent_end`. Then a run that crashed (the provider threw, say) doesn't leave the loop locked, and the next message can run.
+The guard is a flag, and *where* you set it matters. The check and the set must come with no `await` between them. That's Day 3's check-then-act rule again: anything after an `await` may be acting on a check that's no longer true. Here are two guards, run twice at once:
+
+```js run
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let busy = false;
+
+async function gapGuard() {               // ✗ an await between the check and the set
+  if (busy) throw new Error('already running');
+  await delay(1);
+  busy = true;
+  try { await delay(10); return 'done'; } finally { busy = false; }
+}
+
+async function tightGuard() {             // ✓ check and set back to back
+  if (busy) throw new Error('already running');
+  busy = true;
+  try { await delay(10); return 'done'; } finally { busy = false; }
+}
+
+const statuses = async (f) => (await Promise.allSettled([f(), f()])).map((r) => r.status);
+console.log('gap:  ', await statuses(gapGuard));     // → [ 'fulfilled', 'fulfilled' ]   both got in
+console.log('tight:', await statuses(tightGuard));   // → [ 'fulfilled', 'rejected' ]
+```
+
+In `gapGuard`, both calls check `busy` before either has set it, because each one pauses at the `await` in between. In `tightGuard`, the first call's check and set run in one stretch, before it reaches any `await`, so the second call sees `busy` already `true`. That's why `run()` checks and sets its flag on its first two lines.
+
+Reset the flag in the same `finally` that emits `agent_end`, as `tightGuard` does. Then a run that crashed (the provider threw, say) doesn't leave the loop locked, and the next message can run.
 
 ## Build
+
+The order follows the advice in concept 1: words before code. The pseudocode goes in your notes first, then the types, then the loop itself against the course tests, and only at the end a live run with a real model and a real `y`.
 
 **Files today:** `notes/day-12.md`, `src/agent/agent-schemas.js`, `src/agent/agent-loop.js` and `scripts/smoke-loop.js`.
 
@@ -260,6 +322,12 @@ Then name a tool for which parallel execution would be safe and worth it (severa
 
 ## Check
 
+The parts are now one engine. The loop asks the registry for tools on every turn, answers every tool call in order, turns every mistake into a result the model can read, stops a model that won't stop, and refuses risky tools unless someone says yes. It does that with no approver at all, too. Its state lives in locals, so one run can't corrupt another, and every exit ends with exactly one `agent_end`.
+
+Tomorrow you make it stoppable. Day 13 threads Ctrl+C through the whole loop, as Day 3 did for the toy, and builds a fake model that lets every later test run without Ollama. That completes Checkpoint 1.
+
+Before you move on, check:
+
 - [ ] `node --test tests/course/day12-*` green (15 tests)
 - [ ] `notes/day-12.md`: pseudocode written before the code, plus two live transcripts (approve and deny)
 - [ ] With no approver attached, `bash` is denied; with one, you are asked
@@ -301,11 +369,11 @@ The running flag was set, but nothing cleared it when the run threw. Clear it in
 
 ## Common mistakes
 
-- Caching the tool list.
-- Appending the assistant's tool-call message, but calling the provider before all its results are appended.
-- An approval stub that *allows* by default. Fail closed.
-- Deciding who refused by searching the reason's text.
-- Keeping per-run state in module-level variables.
+- **Caching the tool list.** Tools added later (extensions, MCP, skills) never reach the model.
+- **Appending the assistant's tool-call message, but calling the provider before all its results are appended.** The provider sees an unanswered call, and hosted APIs reject the request.
+- **An approval stub that *allows* by default.** A test or a script with no approver then runs commands nobody saw. Fail closed.
+- **Deciding who refused by searching the reason's text.** A policy's reason can contain any words, so route on `by`.
+- **Keeping per-run state in module-level variables.** Two overlapping runs then share it, and both report wrong numbers without an error (concept 6).
 
 ## Self-check
 
