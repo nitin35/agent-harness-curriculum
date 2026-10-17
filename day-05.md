@@ -21,17 +21,42 @@ Usage: node toy/main.mjs [options]
 …
 ```
 
-You have an error vocabulary for the whole harness (`src/shared/errors.js`), a hand-written CLI parser that the toy already uses (`src/cli/args-parser.js`), your own tests, and a toy client tested **without a network**.
+Two things are on that screen. A test suite, part of it written by you, runs green in about a second, and some of those tests check the toy's client **without a network**. And a mistyped flag no longer crashes the toy with a stack trace: it gets a clear message, the usage, and exit code 2. Behind both sit two modules the real harness keeps: an error vocabulary (`src/shared/errors.js`) and a hand-written command-line parser (`src/cli/args-parser.js`).
 
 ## Why it matters
 
-An agent fails constantly: the server is down, a file is missing, the model sends broken JSON. Some failures are **bugs** to fix; others are **expected**, and should flow back to the model or the user as data. Telling the two apart, and proving behaviour with tests that run in a second, is what separates a harness you can trust from a demo.
+In four days the toy has learned to act, to stop when asked, and to stream its answer. All of that was built for the good days. Today is about the bad ones.
+
+An agent fails constantly. The server is down, a file is missing, the model sends broken JSON, the user mistypes a flag. Some of those failures are **bugs** in your code, and the right response is to find out loudly and fix them. Others are **expected**: they happen to correct programs, and they should flow back to the model or the user as information they can act on. A harness that confuses the two either crashes over a missing file or quietly hides its own bugs. Telling them apart is the first half of today.
+
+The second half is proving that things work. So far you've run the course's tests. Today you write your own, including tests for the toy's client that run with no network at all. Tests that run in a second, on any machine, are what separate a harness you can trust from a demo that worked once. And the modules you write today, the error classes and the command-line parser, come with you into the real harness next week.
 
 ## Concepts
 
 ### 1. Two kinds of failure
 
-**Some failures are bugs, and some are the world.** A *programmer error* means the code is wrong: a function was called with the wrong arguments, or something that must never happen did. The fix is to change the code. An *operational error* means the code is fine, but the world isn't as hoped: the server is down, the file doesn't exist, the model sent garbage. Those happen in correct programs, so the program has to handle them.
+**Some failures are bugs, and some are the world.** Here's a small function from a sign-up form that shows both kinds:
+
+```js run
+function parseAge(text) {
+  if (typeof text !== 'string') {
+    throw new TypeError(`parseAge expects a string, got ${typeof text}`);   // our bug
+  }
+  const age = Number(text);
+  if (!Number.isInteger(age) || age < 0) {
+    return { ok: false, error: `"${text}" is not an age` };                // the user's typo
+  }
+  return { ok: true, age };
+}
+
+parseAge('42')        // → { ok: true, age: 42 }
+parseAge('twelve')    // → { ok: false, error: '"twelve" is not an age' }
+parseAge(42)          // TypeError: parseAge expects a string, got number
+```
+
+`parseAge(42)` means some *code* called the function wrongly. That's a **programmer error**: the code is wrong, and the fix is to change the code. `parseAge('twelve')` means the code is fine but the *world* isn't as hoped: a person typed something odd. That's an **operational error**. It happens in correct programs, so the program has to handle it, here by returning a result the form can show to the user.
+
+The same split runs through the harness:
 
 | | Programmer error | Operational error |
 |---|---|---|
@@ -39,7 +64,7 @@ An agent fails constantly: the server is down, a file is missing, the model send
 | What to do | **throw**, loudly and early | **return** it as data the caller can act on, or throw a *categorized* error with a hint |
 | In the harness | `TypeError`, `Error` | `ToolResult { isError: true }`, `ProviderError` |
 
-**Throw programmer errors at once.** A bug found at the point where it happens, with a stack trace, is cheap to fix. A bug that limps on shows up later, far from its cause. On Day 9, registering two tools with the same name is a bug in whoever wired them up, so the registry throws:
+**Throw programmer errors at once.** A bug found at the point where it happens, with a stack trace, is cheap to fix. A bug that limps on shows up later, far from its cause, where it's expensive to find. On Day 9, registering two tools with the same name is a bug in whoever wired them up, so the registry throws:
 
 ```js
 function registerTool(tools, tool) {
@@ -48,7 +73,7 @@ function registerTool(tools, tool) {
 }
 ```
 
-**Return operational errors as data.** In an agent, the model is a "caller" too. If it asks to read a file that doesn't exist, that isn't a crash. It is information the model can act on: it can try another path. So a tool turns the failure into a result. Here is a sketch of Day 10's `read` tool:
+**Return operational errors as data.** An agent harness has an unusual extra caller: the model. It makes mistakes all the time, and it can recover from most of them if it's told what went wrong. If it asks to read a file that doesn't exist, that isn't a crash. It's information the model can act on, for example by trying another path. So a tool turns the failure into a result. Here is a sketch of Day 10's `read` tool:
 
 ```js
 import { readFile } from 'node:fs/promises';
@@ -66,16 +91,39 @@ await readTool({ path: 'notes/missing.md' })
 // → { content: 'File not found: notes/missing.md', isError: true }
 ```
 
-Notice how it recognises the failure: Node's file errors carry a `code` (`'ENOENT'`, "no such file or directory"), and the tool checks that, not the message text.
+Notice how it recognises the failure. Node's file errors carry a `code` (`'ENOENT'` means "no such file or directory"), and the tool checks that, not the message text. Notice too what it *doesn't* catch. A permission error or a full disk isn't something this tool expects, so it lets those through.
 
-**Errors carry a category for the person at the keyboard.** The harness's top level (Day 26) talks to the user differently depending on the error's **category**:
+**Errors carry a category for the person at the keyboard.** When an error does reach the top of the harness (Day 26), what to tell the user depends on the error's **category**:
 - `user` (a bad flag or setting): print the message and a usage hint;
 - `provider` (network or model): print an actionable hint, such as *"is Ollama running?"*;
 - `internal` (a bug): write the stack to a log file and print a short message.
 
+To attach a category to an error, you need errors that can carry fields. That's the next concept.
+
 ### 2. Custom error classes and `cause`
 
-**Subclass `Error` so code can tell failures apart.** A plain `Error` has a message, and code shouldn't make decisions by reading messages. An error *class* can carry a recognisable type and extra fields. This is the base class for the whole harness:
+**Subclass `Error` so code can tell failures apart.** A plain `Error` has a message, and code shouldn't make decisions by reading messages. An error *class* can carry a recognisable type and extra fields. Here's a small one for the bank account from Day 2:
+
+```js run
+class InsufficientFundsError extends Error {
+  constructor(balance, amount) {
+    super(`Cannot withdraw ${amount}: the balance is ${balance}`);
+    this.name = 'InsufficientFundsError';
+    this.shortBy = amount - balance;           // a field the caller can use
+  }
+}
+
+const err = new InsufficientFundsError(20, 50);
+err instanceof InsufficientFundsError    // → true
+err instanceof Error                     // → true
+err.shortBy                              // → 30
+String(err)
+// → 'InsufficientFundsError: Cannot withdraw 50: the balance is 20'
+```
+
+A caller can now write `if (err instanceof InsufficientFundsError)` and offer to move `err.shortBy` from savings, without ever parsing the message.
+
+The harness has one base class that all its errors extend:
 
 ```js
 export class HarnessError extends Error {
@@ -114,7 +162,7 @@ export class UsageError extends HarnessError {
 }
 ```
 
-**Route on the type or the category, never on message text.** Messages get reworded; types and fields are a contract:
+**Route on the type or the category, never on message text.** Messages get reworded, while types and fields are a contract:
 
 ```js
 if (err.message.startsWith('Unknown option')) …   // ✗ breaks the day someone rewords the message
@@ -122,7 +170,26 @@ if (err instanceof UsageError) …                  // ✓
 if (err.category === 'user') …                    // ✓
 ```
 
-**`cause` keeps the original failure when you add context.** A low-level error like `fetch failed` doesn't tell the user what was being attempted. Wrap it in an error that does, and pass the original along as `cause`:
+**`cause` keeps the original failure when you add context.** A low-level error rarely says what was being attempted. `JSON.parse` complains about "position 1", not about which file it was reading. So catch it, throw a new error that says what you were doing, and pass the original along as `cause`:
+
+```js run
+function loadSettings(text) {
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error('Could not read settings.json', { cause: err });
+  }
+}
+
+try {
+  loadSettings('{oops');
+} catch (err) {
+  console.log(err.message);          // → Could not read settings.json
+  console.log(err.cause.name);       // → SyntaxError
+}
+```
+
+Nothing is lost. The new message says what failed, and `err.cause` still holds the exact original error for anyone debugging. The harness does the same when Ollama can't be reached:
 
 ```js
 try {
@@ -136,7 +203,7 @@ try {
 }
 ```
 
-Nothing is lost. `err.cause.message` is `'fetch failed'`, and `err.cause.cause.code` is `'ECONNREFUSED'` (Day 3). If the error goes uncaught, Node prints the whole chain, custom fields included:
+On the `ProviderError` this throws, `.cause.message` is `'fetch failed'`, and `.cause.cause.code` is `'ECONNREFUSED'` (Day 3). If the error goes uncaught, Node prints the whole chain, custom fields included:
 
 ```
 ProviderError: Cannot reach Ollama
@@ -148,11 +215,33 @@ ProviderError: Cannot reach Ollama
     [cause]: … ECONNREFUSED …
 ```
 
-Python contrast: `cause` is `raise … from err`, which sets `__cause__`.
+Python contrast: `cause` is `raise … from err`, which sets `__cause__`, and subclassing `Error` is like subclassing `Exception`. C++ contrast: it's like deriving from `std::exception`, with `cause` playing the part of `std::nested_exception`.
 
 ### 3. `try / catch / finally`
 
-**`finally` always runs.** A `try` block runs your code. If something in it throws, `catch` receives the thrown value. `finally` runs last, *whatever happened*: after a normal finish, after a `return`, after a `throw` and after a `break`. Even a `return` inside `try` waits for it:
+Throwing is half of error handling. The other half is what happens on the way out: who catches the error, and what gets cleaned up.
+
+**The three blocks, in order.** A `try` block runs your code. If something in it throws, the rest of the `try` is skipped and `catch` receives the thrown value. `finally` runs last, *whatever happened*. Here is the same function run once with a failure and once without:
+
+```js run
+function flow(fail) {
+  try {
+    console.log('1 try starts');
+    if (fail) throw new Error('boom');
+    console.log('2 try ends');
+  } catch (err) {
+    console.log('2 catch:', err.message);
+  } finally {
+    console.log('3 finally');
+  }
+  console.log('4 after');
+}
+
+flow(true);           // 1 try starts, 2 catch: boom, 3 finally, 4 after
+flow(false);          // 1 try starts, 2 try ends, 3 finally, 4 after
+```
+
+**`finally` runs even when the function is leaving.** It runs after a normal finish, after a `throw`, after a `break`, and after a `return`. A `return` inside `try` waits for it:
 
 ```js run
 function demo() {
@@ -167,49 +256,103 @@ function demo() {
 demo()                             // logs: working, then cleanup   → 'result'
 ```
 
-**JavaScript has no destructors, so `finally` is your cleanup.** An open file, a timer, a child process or a stream reader does **not** clean itself up when a function exits early. If you start something, stop it in a `finally`:
+One trap follows from this. A `return` or a `throw` *inside* `finally` replaces whatever was already on its way out, including an error, which then disappears without a trace:
+
+```js run
+function swallowed() {
+  try {
+    throw new Error('the real problem');
+  } finally {
+    return 'everything is fine';     // ✗ the error above is silently thrown away
+  }
+}
+
+swallowed()                        // → 'everything is fine'
+```
+
+So keep `finally` blocks to cleanup, and never `return` from one.
+
+**`finally` works with `await` too.** In an `async` function, a `finally` after an `await` runs when the awaited work settles, however it settles. The caller doesn't wait around for it; the cleanup happens later, when the function resumes:
+
+```js run
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function job() {
+  try {
+    console.log('1 before await');
+    await delay(10);
+    console.log('3 after await');
+  } finally {
+    console.log('4 finally');
+  }
+}
+
+const done = job();
+console.log('2 the caller carries on');
+await done;
+```
+
+**JavaScript has no destructors, so `finally` is your cleanup.** An open file, a timer, a child process or a stream reader does **not** clean itself up when a function exits early. If you start something, stop it in a `finally`. Here a progress indicator prints dots while a slow task runs:
 
 ```js
-async function chatWithDots(client, messages) {
+async function withDots(task) {
   const timer = setInterval(() => process.stdout.write('.'), 100);   // a progress indicator
   try {
-    return await client.chat(messages, []);
+    return await task();
   } finally {
     clearInterval(timer);          // stop the dots: on success, on failure, and on abort
   }
 }
 ```
 
-Without the `finally`, a failed `chat` would leave the interval running forever, and the program would never exit. You've already relied on this: Day 4's `readNdjson` cancels its reader in a `finally`.
+Without the `finally`, a failed task would leave the interval running forever, and since a live timer keeps Node running (Day 3), the program would never exit. Notice the `return await` too. As Day 3 showed, a plain `return task()` would leave the `try` before the task settled. Here that would mean clearing the dots too early, and a rejection would skip any `catch`. You've already relied on cleanup like this: Day 4's `readNdjson` cancels its reader in a `finally`.
 
-C++ contrast: `finally` does what RAII did for you. Python contrast: it's `try/finally`, without `with`.
+C++ contrast: `finally` does the job RAII did for you, by hand. Python contrast: it's `try/finally`, without `with`.
 
-**Catch what you expect, and rethrow the rest.** A `catch` that swallows everything turns bugs into silence. The Day 3 loop caught `AbortError` and rethrew anything else; `readTool` above catches `ENOENT` and rethrows anything else. Today's `toy/main.mjs` does the same with the `user` category.
+**Catch what you expect, and rethrow the rest.** A `catch` that swallows everything turns bugs into silence. The Day 3 loop caught `AbortError` and rethrew anything else, and `readTool` above catches `ENOENT` and rethrows anything else. Today's `toy/main.mjs` does the same with the `user` category.
 
-**Anything can be thrown.** `throw 'oops'` is legal: the caught value is then a string, with no `name` and no stack. Always throw `Error` objects. And code that inspects a caught value must not assume it's an object. That's why `isAbortError(err)` reads `err?.name`: with `undefined`, plain `err.name` would itself throw a `TypeError`.
+**Anything can be thrown.** `throw 'oops'` is legal. The caught value is then a string, with no `name` and no stack. Always throw `Error` objects. And code that inspects a caught value must not assume it's an object. That's why `isAbortError(err)` reads `err?.name`: with `undefined`, plain `err.name` would itself throw a `TypeError`.
 
 ### 4. `node:test` and `node:assert/strict`
 
-**A test is a function that throws when something is wrong.** Node has a test runner built in. `test(name, fn)` registers a test. The test passes if `fn` returns (or its promise resolves) without throwing, and fails if it throws (or rejects). An assertion is a function that throws when its check fails:
+**A test is a function that throws when something is wrong.** Node has a test runner built in. `test(name, fn)` registers a test. The test passes if `fn` returns without throwing, and fails if it throws. An **assertion** is a function that throws when its check fails, so a test is mostly a list of assertions. Here's a complete test file for a small function:
 
 ```js
+// tests/initials.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { truncateText } from '../src/tools/truncate.js';
 
-test('short text passes through', () => {
-  assert.deepEqual(truncateText('hi', 10), {
-    content: 'hi',
-    truncated: false,
-    byteLength: 2,
-    shownBytes: 2,
-  });
+const initials = (name) => name.split(' ').map((w) => w[0].toUpperCase()).join('');
+
+test('initials of a two-word name', () => {
+  assert.equal(initials('ada lovelace'), 'AL');
 });
 
-test('rejects', async () => {
-  await assert.rejects(doThing(), /expected message/);
+test('initials of a one-word name', () => {
+  assert.equal(initials('plato'), 'P');
 });
 ```
+
+Run it with `node --test`, and each test gets a line: `✔` for a pass, `✖` for a failure, with the expected and actual values printed underneath.
+
+**An async test passes or fails when its promise settles.** If `fn` is `async`, it returns a promise, and the runner *waits* for it. The test passes if the promise fulfils and fails if it rejects. That's how a test can check slow work:
+
+```js
+test('the client reports an unreachable server', async () => {
+  await assert.rejects(client.chat(messages, []), ProviderError);
+});
+```
+
+`assert.rejects(promise, check)` returns a promise of its own. It fulfils if `promise` rejects in the expected way, and rejects (with an `AssertionError`) if it doesn't. So the `await` in front of it is not optional. Leave it out, and the test function returns at once, before the check has run. The runner sees a function that finished without throwing, and marks the test `✔`. When the check fails a moment later, there's no test left to fail:
+
+```
+✔ the client reports an unreachable server (0.6ms)
+ℹ Error: Test "the client reports an unreachable server" … generated asynchronous activity after the
+  test ended. This activity created the error "AssertionError [ERR_ASSERTION]: Missing expected
+  rejection." and would have caused the test to fail, but instead triggered an unhandledRejection event.
+```
+
+It's Day 3's forgotten `await`, with a test runner watching. The rule is the same as everywhere else: every promise a test creates must be `await`ed inside it.
 
 **The assertions you'll use most:**
 - `assert.equal(actual, expected)` compares with `===`. For objects that means *the same object* (Day 2), so two lookalike objects fail with `Values have same structure but are not reference-equal`.
@@ -218,7 +361,7 @@ test('rejects', async () => {
 - `assert.throws(fn, check)` and `await assert.rejects(promise, check)` expect a failure. The `check` can be a class, a regex, or a function.
 - `assert.ok(value)` checks that a value is truthy.
 
-The `/strict` in the import matters: it makes `equal` and `deepEqual` the strict versions, which never coerce (`'1'` is not `1`).
+The `/strict` in the import matters. It makes `equal` and `deepEqual` the strict versions, which never coerce (`'1'` is not `1`).
 
 **Table-driven tests.** When the same check runs over many inputs, write the inputs as data and make a sub-test per row with `t.test()`:
 
@@ -247,6 +390,8 @@ Each row is reported on its own line, so a failure names the input that broke:
 ✔ byte lengths
 ```
 
+Adding a case is now one line of data, which makes it much more likely that you'll add the awkward ones.
+
 **Running tests:**
 - `node --test` with no arguments finds and runs every `*.test.js` file in the project.
 - To run some files only, pass the files or a glob: `node --test tests/course/day05-*`. A bare directory (`node --test tests/course/`) does **not** work on Node 22+.
@@ -256,7 +401,7 @@ Python contrast: `node:test` plays the role of `unittest` or `pytest`, and `asse
 
 ### 5. Dependency injection is how you fake things in tests
 
-Day 2 injected `confirm` and `runTool` into `runTurns`. Today you do the same for the network. The client takes `fetch` as an option, and defaults it to the real one:
+A test that talks to a real server is slow, fails when the server is down, and can't easily make the server misbehave on purpose. So tests replace the server with a fake. Day 2 showed the way to make that possible: injecting `confirm` and `runTool` into `runTurns`. Today you do the same for the network. The client takes `fetch` as an option, and defaults it to the real one:
 
 ```js
 // production: nobody passes fetch, so the default, the real one, is used
@@ -278,9 +423,11 @@ await res.json()                   // → { version: '0.0.0-test' }
 new Response('model not found', { status: 404 }).ok   // → false
 ```
 
-The body can also be a `ReadableStream`, which is how 5.4 fakes a streamed reply. And because the fake receives `init`, it can record what the client sent, so a test can check both directions.
+The fake is `async`, so it returns a promise of a `Response`, exactly as the real `fetch` does, and the client can't tell the difference.
 
-**Why pass `fetch` in, when it is a global you *could* patch with `t.mock.method(globalThis, 'fetch')`?**
+**The body can also be a stream.** That's how 5.4 fakes a streamed reply. `new ReadableStream({ start(controller) { … } })` calls `start` once, straight away. Inside it, `controller.enqueue(chunk)` adds a chunk for the reader to receive, and `controller.close()` says there will be no more. Forget the `close()`, and the client's reader loop waits for a next chunk that never comes, so the test hangs. And because the fake receives `init`, it can record what the client sent, so a test can check both directions.
+
+**Why pass `fetch` in, when it's a global you *could* patch with `t.mock.method(globalThis, 'fetch')`?**
 - **It's explicit.** The signature says what the module talks to.
 - **Nothing shared leaks.** A patched global affects every test in the file until someone restores it.
 - **It works for imports too.** You *can't* reassign an imported binding: imports are live, read-only views of another module (Node's `mock.module()` is still experimental):
@@ -294,6 +441,8 @@ Every test from Day 8 on uses this pattern, and Day 3's course tests already did
 
 ### 6. The command line: `process.argv`, flags and exit codes
 
+The last piece of today is the toy's first real interface to the outside world: its command line.
+
 **Your program receives its arguments as an array of strings.** `process.argv` holds the path to `node`, the path to your script, and then every word typed after it. So the arguments themselves are `process.argv.slice(2)`:
 
 ```js
@@ -301,7 +450,7 @@ Every test from Day 8 on uses this pattern, and Day 3's course tests already did
 process.argv.slice(2)              // → ['--model', 'qwen3.5:9b', '--num-ctx', '16384']
 ```
 
-Every value is a string, even `'16384'`. Converting and checking it is your job (Day 2's *converting on purpose*).
+Every value is a string, even `'16384'`. Converting and checking it is your job (Day 2's *converting on purpose*), and a value that doesn't convert is an operational error, the user's typo, not a bug.
 
 **Flags follow conventions that users expect.** A long flag is written `--model`, and a short one `-m`. A flag that takes a value accepts it as the next word (`--model qwen3.5:9b`) or after an `=` (`--model=qwen3.5:9b`). A word that isn't a flag is a *positional* argument. A lone `--` means "everything after this is positional, even if it starts with a dash". 5.5's parser implements exactly these rules.
 
@@ -310,6 +459,8 @@ Every value is a string, even `'16384'`. Converting and checking it is your job 
 **Errors go to stderr.** `console.log` writes to *standard output* (stdout), and `console.error` writes to *standard error* (stderr). Both appear in your terminal. But when someone pipes your program into another one, only stdout goes down the pipe, so error messages on stderr can't corrupt the real output. Day 26's `-p` mode depends on this.
 
 ## Build
+
+The order is deliberate. First the error classes, because the parser throws them. Then a short exercise in telling failures apart, and two rounds of writing tests. Last, the parser itself, and the toy's first flags, which use everything before them.
 
 **Files today:** `src/shared/errors.js`, `src/cli/args-parser.js`, `notes/day-05.md`, `tests/truncate.test.js`, `tests/toy-ollama.test.js`, `toy/ollama.mjs` and `toy/main.mjs`.
 
@@ -344,11 +495,11 @@ In `notes/day-05.md`, classify each of these as a programmer or an operational e
 - the user passes `--nope`;
 - `run()` is called while it is already running.
 
-For each, ask concept 1's question: is this a bug in our code, or something the world did? Then ask who can act on it: the developer, the user, or the model.
+For each, ask concept 1's question: is this a bug in our code, or something the world did? Then ask who can act on it: the developer, the user, or the model. A few are less obvious than they look. The broken JSON came from the model, not from your code, and the `--nope` came from a person, so think about who sees the result.
 
 ### 5.3 Test bootcamp: your own truncate tests — Core
 
-In `tests/truncate.test.js`, write your own cases as a **table** of `{ input, maxBytes, shownBytes }` rows, one `t.test()` per row (concept 4 shows the pattern). Include an emoji at the boundary. Break one assertion on purpose, read the diff in the output, then fix it.
+The course tests have been telling you whether your code works. Now you write the tests yourself, for the truncator you wrote yesterday. In `tests/truncate.test.js`, write your own cases as a **table** of `{ input, maxBytes, shownBytes }` rows, one `t.test()` per row (concept 4 shows the pattern). Include an emoji at the boundary. Break one assertion on purpose, read the diff in the output, then fix it.
 
 ### 5.4 Test the toy client offline — Core
 
@@ -383,7 +534,7 @@ test('chat() joins streamed chunks, and asks for the context window it was given
 });
 ```
 
-The fake builds a stream that delivers the two NDJSON lines and then closes, which is what Ollama's body does. `sent` records each request body, which is how the test sees what the client asked for.
+The fake builds a stream that delivers the two NDJSON lines and then closes, which is what Ollama's body does (concept 5). `sent` records each request body, which is how the test sees what the client asked for. Notice the `await` in front of `client.chat`: as concept 4 explains, without it the assertions would run against a promise, long before the reply was put together.
 
 The test must pass **with your Wi-Fi off**. The `num_ctx` assertion is the important one: forgetting to send it produces no error anywhere, only a model that quietly forgets its instructions.
 
@@ -391,7 +542,7 @@ The day's course tests include `day05-toy-client.test.js`, which uses the same s
 
 ### 5.5 `src/cli/args-parser.js` — Core
 
-The harness's real CLI parser, written by hand. Its API:
+The harness's real CLI parser, written by hand. Node has a built-in one, `util.parseArgs`, but writing your own once teaches you exactly what the conventions in concept 6 mean, and it gives you a module whose every decision is yours and pinned by a test. Its API:
 
 ```js
 /**
@@ -457,7 +608,7 @@ Put the parser to work today. Give `toy/main.mjs` three flags, and pass the valu
 | `--num-ctx <tokens>` | the context window; a whole number of at least 1024, else throw a `ValidationError` with `field: 'num-ctx'` |
 | `-h, --help` | print the usage and exit 0 |
 
-Read the flags before creating anything else. On an error whose `category` is `'user'`, print its message and the usage, then `process.exit(2)`. Rethrow anything else: that's a bug, and it should crash loudly. The routing is a few lines:
+Read the flags before creating anything else, so a typo is reported before the toy opens readline or talks to Ollama. On an error whose `category` is `'user'`, print its message and the usage, then `process.exit(2)`. Rethrow anything else: that's a bug, and it should crash loudly. The routing is a few lines:
 
 ```js
 let options;
@@ -495,6 +646,12 @@ npx tsc --allowJs --checkJs --noEmit --strict false --target es2022 --module nod
 Fix what it finds. Expect things like an `unknown` value used without checking its shape, a string where a literal type such as `'boolean' | 'string'` was wanted, an options parameter `{ signal } = {}` with no `@param` type, or fields set with `Object.assign(this, …)` that the checker can't see. A JSDoc annotation (or plain `this.x = x` assignments) usually settles them. (Node 24 can also run `.ts` files directly through type stripping. This course stays with JSDoc so you see plain JavaScript.)
 
 ## Check
+
+That's the end of week one. The toy acts, stops when asked, streams, and now fails well: bugs crash loudly where they happen, while the world's failures come back as messages someone can act on. You can also prove it. You have tests of your own, a client tested with no network, and a habit of checking what was sent as well as what came back. The error classes and the parser are the first pieces of the real harness that you'll keep using every day from here on.
+
+Tomorrow you stop building for a day and read. Day 6 walks through Pi, a serious open-source harness, and you write down the design of your own before you start on it in Day 7.
+
+Before you move on, check:
 
 - [ ] `src/shared/errors.js` exports all five, and `node --test tests/course/day05-errors.test.js` passes
 - [ ] `notes/day-05.md` has your classification
@@ -534,12 +691,22 @@ Classes must be created with `new`: `throw new UsageError(…)`, not `throw Usag
 
 <details><summary>A test shows ✔, but the file fails with "generated asynchronous activity after the test ended"</summary>
 
-A promise in the test wasn't awaited. The usual culprit is `assert.rejects(…)` without `await`. The test finished before the check did, and the failed check arrived too late to count. Write `await assert.rejects(…)`.
+A promise in the test wasn't awaited. The usual culprit is `assert.rejects(…)` without `await`. The test function returned before the check ran, so the runner had already marked it passed when the check failed (concept 4). Write `await assert.rejects(…)`.
 </details>
 
 <details><summary>A test hangs and never finishes</summary>
 
 Something it awaits never settles. With a fake streaming body, check that `start` calls `c.close()` after the last chunk: without it, the client waits for more data forever. Run with `node --test --test-timeout=5000` to turn a hang into a failure that names the test.
+</details>
+
+<details><summary>An error vanished: the function returned normally, though something inside it threw</summary>
+
+Look for a `return` inside a `finally` block. It replaces whatever was leaving the function, including a thrown error (concept 3). Keep `finally` to cleanup only.
+</details>
+
+<details><summary>My error prints as <code>Error: …</code>, not with its class name</summary>
+
+The subclass never set `this.name`. Add `this.name = 'UsageError'` (or whichever class it is) in the constructor, after `super(…)`.
 </details>
 
 <details><summary><code>--num-ctx 16384</code> arrives as a string</summary>
@@ -554,12 +721,12 @@ On Node 22+, `node --test` takes files or glob patterns, not directories. Use `n
 
 ## Common mistakes
 
-- `catch (e) { return undefined; }`, which turns bugs into quiet `undefined`s.
-- Deciding what to do by reading `err.message`, instead of checking `instanceof`, `category` or `code`.
-- `assert.equal` on objects (it compares identity) instead of `deepEqual`.
-- `assert.rejects` without `await`.
-- Tests that hit the real network: slow, flaky, and broken offline.
-- Testing only what comes back, never what was sent.
+- **`catch (e) { return undefined; }`.** It turns bugs into quiet `undefined`s that fail somewhere else, much later, with no stack trace pointing back here.
+- **Deciding what to do by reading `err.message`,** instead of checking `instanceof`, `category` or `code`. Messages are written for people and get reworded. Types and codes are a contract.
+- **`assert.equal` on objects instead of `deepEqual`.** `equal` compares identity, so two objects with the same contents still fail.
+- **`assert.rejects` without `await`.** The test returns before the check runs, so it passes no matter what.
+- **Tests that hit the real network.** They're slow, they fail when the server is down, and they can't make the server misbehave on purpose. Inject a fake instead.
+- **Testing only what comes back, never what was sent.** Some of the worst bugs, like a missing `num_ctx`, are in the request, and the reply still looks fine.
 
 ## Self-check
 
