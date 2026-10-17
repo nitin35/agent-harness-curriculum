@@ -12,11 +12,15 @@ fixtures/
 └── stream-tools.ndjson  streamed tool calls (two, in parallel)
 ```
 
-You have captured exactly what Ollama sends, **seen the silent context truncation with your own eyes**, filled in the internal ↔ Ollama mapping table from those captures, and written `src/shared/message-schemas.js`, the one vocabulary the rest of the harness speaks.
+Four files of evidence: exactly what Ollama sent, saved byte for byte. From them you've filled in the internal ↔ Ollama mapping table, and you've **seen the silent context truncation with your own eyes**, a secret lost without an error. You've also written `src/shared/message-schemas.js`, the one vocabulary the rest of the harness speaks.
 
 ## Why it matters
 
-The toy used Ollama's field names everywhere (`tool_calls`, `function.arguments`, `role: 'tool'`). A real harness has **one internal vocabulary** and one small translator per provider, so swapping or adding a provider (Day 21) touches nothing else. You can only write that translator well if you know the wire *from evidence*. Docs lag behind servers: while this course was being built, the API reference said tool calls have no `id`, but a live server sends one.
+Yesterday you designed the harness. Today you lay its first brick, and it's the one everything else stands on: the shape of a message.
+
+The toy used Ollama's field names everywhere (`tool_calls`, `function.arguments`, `role: 'tool'`). That was fine for 70 lines, but a real harness can't work that way. It has **one internal vocabulary** and one small translator per provider, so swapping or adding a provider (Day 21) touches nothing else. You can only write that translator well if you know what really crosses the wire, and you have to know it *from evidence*. Documentation lags behind servers. While this course was being built, the API reference said tool calls have no `id`, but a live server sends one.
+
+So today is half lab, half writing. You capture exactly what Ollama sends, you watch it quietly throw away part of a prompt, and then you write down, as types, the vocabulary the rest of the harness will speak.
 
 ## Concepts
 
@@ -48,9 +52,11 @@ args.command                             // → undefined: no error, just a miss
 JSON.parse(args).command                 // → 'ls'
 ```
 
-So the provider converts at the boundary, once, and everything past it can rely on one shape. Day 8 writes that translator for Ollama. Day 21 writes a second one, and nothing else changes. C++ contrast: it's the adapter pattern, converting a third-party library's structs into your own types at the edge of your code.
+That `undefined` is Day 2's quiet missing property, and it would travel on into a tool that receives no command at all. So the provider converts at the boundary, once, and everything past it can rely on one shape. Day 8 writes that translator for Ollama. Day 21 writes a second one, and nothing else changes. C++ contrast: it's the adapter pattern, converting a third-party library's structs into your own types at the edge of your code. Python contrast: it's the same reason you'd turn a web API's JSON into your own dataclasses as soon as it arrives.
 
 ### 2. What Ollama actually sends
+
+To write the translator, you need to know the dialect exactly, so let's look at a real response rather than a description of one.
 
 **Start from a real capture.** This is the course's `chat-tools.json`, trimmed (the thinking text is long):
 
@@ -80,6 +86,8 @@ Things to notice:
 - the call has an `id`, even though the API reference said it wouldn't;
 - `done_reason` is `"stop"`, even though the model called a tool. To know whether it did, look for `tool_calls`, not for a special reason;
 - the prompt asked for two calls, and this time the model made one. Models don't always follow instructions about parallel calls.
+
+Each of those is a decision your provider has to get right, and two of them contradict what you might reasonably guess. That's the case for capturing before coding.
 
 From the captures in [`course-assets/captures/ollama-0.32/`](course-assets/captures/ollama-0.32/), re-checked against Ollama 0.35:
 
@@ -112,20 +120,67 @@ Older servers may leave out the `id`. The provider then **generates** one, becau
 
 ### 3. The context window you actually get
 
-**A model reads a limited number of tokens.** A *token* is a piece of text, often part of a word; English averages roughly four characters per token. The *context window* is how many tokens the model can work with at once. The system prompt, the tool list, the whole conversation and the reply being written all share it.
+Day 1 warned you about the context window. Today you measure it, so here is the idea in full.
+
+**A model reads a limited number of tokens.** A *token* is a piece of text, often part of a word. English averages roughly four characters per token. The *context window* is how many tokens the model can work with at once. The system prompt, the tool list, the whole conversation and the reply being written all share it.
 
 **Three numbers, and they're not the same:**
 - what the model *can* handle: `POST /api/show` reports it (`qwen35.context_length: 262144` for the course model);
 - what the server is *running with*: `ollama ps` shows it in its `CONTEXT` column, and it's **4096** on most laptops unless you ask for more;
 - what you *asked for*: `options.num_ctx` on the request.
 
-**When a prompt doesn't fit, nothing fails.** Ollama answers **HTTP 200** and quietly drops the beginning of the prompt. That's where the system prompt and the tool list live, so the model answers a question it only half saw. You'll watch it happen in 7.4, where the model loses a secret it was given in the system prompt. The one visible sign is in the numbers: `prompt_eval_count`, the tokens the server actually read, comes back far smaller than the prompt you sent.
+It's the second number that decides what happens, and it's the one nobody looks at.
+
+**When a prompt doesn't fit, nothing fails.** Ollama answers **HTTP 200** and quietly drops the beginning of the prompt. That's where the system prompt and the tool list live, so the model answers a question it only half saw. It doesn't know anything is missing, so it doesn't say so. You'll watch it happen in 7.4, where the model loses a secret it was given in the system prompt. The one visible sign is in the numbers: `prompt_eval_count`, the tokens the server actually read, comes back far smaller than the prompt you sent.
 
 That's why every request sends `num_ctx` (Day 1's toy already did), why Day 8's provider budgets with the window you will *actually* get, `min(num_ctx, the model's maximum)`, and why Day 24 warns when `prompt_eval_count` looks too small.
 
 ### 4. JSDoc typedefs as the schema language
 
-**A schema written as types.** `src/shared/message-schemas.js` contains no code at all, only JSDoc `@typedef`s: the shapes that every other module agrees on. `@typedef` and `@property` give you C-struct or Python-`TypedDict`-style shapes, written in comments that your editor checks. Here is one, `ToolCall`:
+The last piece of today is writing the vocabulary down, so that every module agrees on it and your editor can check it.
+
+**A schema written as types.** `src/shared/message-schemas.js` contains no code at all, only JSDoc `@typedef`s: the shapes that every other module agrees on. Python contrast: a typedef with `@property` lines is much like a `TypedDict`. C++ contrast: it's a plain struct declaration, checked by your editor rather than a compiler. Day 2 introduced `@typedef` and `@property`. A schema file needs three more pieces of the type language, shown here on a pizza order:
+
+```js
+// @ts-check
+/** @typedef {'small' | 'medium' | 'large'} Size */
+
+/**
+ * @typedef {object} PizzaOrder
+ * @property {Size} size
+ * @property {string[]} toppings
+ * @property {string} [note]                       optional: square brackets around the name
+ */
+
+/** @type {PizzaOrder} */
+const order = { size: 'huge', toppings: [] };
+// ✗ Type '"huge"' is not assignable to type 'Size'.
+
+/** @type {PizzaOrder} */
+const bare = { size: 'small' };
+// ✗ Property 'toppings' is missing in type '{ size: "small"; }' but required in type 'PizzaOrder'.
+```
+
+Reading it piece by piece:
+- **`'small' | 'medium' | 'large'`** is a union of string literals (Day 6's union syntax). A value of that type must be exactly one of those strings, so `'huge'` is rejected, and so is a typo like `'smal'`.
+- **`[note]`**, in square brackets, marks a property as optional. An order without a `note` is fine, while one without `toppings` isn't.
+- **`/** @type {PizzaOrder} */`** above a variable tells the checker which shape the value must have.
+
+The third piece is the one data from outside needs. JSON from a file or a server could contain anything, so its honest type is `Record<string, unknown>`: an object with string keys, whose values are of a type you don't know yet. `unknown` means you must check a value before you use it:
+
+```js
+/** @type {Record<string, unknown>} */
+const settings = JSON.parse('{"volume": 7}');
+
+settings.volume + 1;
+// ✗ Operator '+' cannot be applied to types 'unknown' and '1'.
+
+if (typeof settings.volume === 'number') {
+  settings.volume + 1;                           // ✓ checked first, so the checker knows it's a number
+}
+```
+
+That's the same narrowing you saw in Day 6's `Shape` example. The check is real code that runs, and the type checker follows it. Tool-call arguments come from the model, so in the harness they are `Record<string, unknown>` for exactly this reason. Here is `ToolCall`:
 
 ```js
 /**
@@ -138,10 +193,7 @@ That's why every request sends `num_ctx` (Day 1's toy already did), why Day 8's 
  */
 ```
 
-How to read it:
-- Square brackets around a name, `[parseError]`, mark the property as optional.
-- `Record<string, unknown>` means "an object with string keys, whose values you must check before you use them".
-- A union of string literals, such as the `Role` type `'system'|'user'|'assistant'|'tool_result'`, says that a value must be exactly one of those strings (Day 6's union syntax).
+`arguments` is an object, but nothing promises what's in it. `parseError` is optional, present only when the wire arguments couldn't be parsed at all. A union of string literals, such as the `Role` type `'system'|'user'|'assistant'|'tool_result'`, works exactly like `Size`.
 
 **Other files import the types, not values.** They write `/** @typedef {import('./message-schemas.js').AgentMessage} AgentMessage */`. That line exists only for the type checker: Node never loads anything for it. The file ends with `export {};` to say plainly that it is a module. Without any `import` or `export`, TypeScript can read a file as a plain script and turn every typedef into a global name, visible everywhere without an import.
 
@@ -154,7 +206,11 @@ const call = { id: 'call_1', name: 'bash' };
 //   but required in type 'ToolCall'.
 ```
 
+Remember Day 2's warning, though: types exist only while you write. They catch your own mistakes, but they can't check what a server sends at run time. Turning what really arrives into these shapes, and noticing when it doesn't fit, is the provider's job, starting tomorrow.
+
 ## Build
+
+Steps 7.1 to 7.4 are the lab: you send requests by hand with `curl` and keep what comes back. Keep the fixtures you save: they're your evidence. Tomorrow's course tests replay the course's own captures of these same requests (in `course-assets/captures/`), so comparing yours with them today tells you whether your server behaves the same way. Then 7.5 and 7.6 turn the evidence into a table and a schema.
 
 **Files today:** `fixtures/` (your captures), `scratch/long-prompt.mjs`, `notes/day-07.md` and `src/shared/message-schemas.js`.
 
@@ -254,7 +310,7 @@ Send the conversation back with a tool result in it. Save this as `scratch/round
 }
 ```
 
-`curl -s http://localhost:11434/api/chat -d @scratch/round-trip.json`. Does the answer mention `a.txt` and `b.txt`? Then try it once with only `tool_name` and once with only `tool_call_id`, and note whether either one alone is enough.
+`curl -s http://localhost:11434/api/chat -d @scratch/round-trip.json`. Does the answer mention `a.txt` and `b.txt`? If it does, the model read your tool result, which means you've spoken Ollama's dialect correctly in both directions. Then try it once with only `tool_name` and once with only `tool_call_id`, and note whether either one alone is enough.
 
 ### 7.4 See the silent truncation — Core
 
@@ -289,7 +345,7 @@ Send the conversation back with a tool result in it. Save this as `scratch/round
    fs.writeFileSync('scratch/long-16k.json', JSON.stringify(request({ num_ctx: 16384 })));
    ```
 
-   `...(options && { options })` adds an `options` field only when there are options. When `options` is `undefined`, the `&&` gives `undefined`, and spreading `undefined` into an object adds nothing. So the first request has no `options` at all, and the server uses its default window.
+   `...(options && { options })` adds an `options` field only when there are options. It relies on two rules. First, `a && b` doesn't give `true` or `false`: it gives `a` if `a` is falsy, and otherwise `b`. So `undefined && { options }` is `undefined`, while `{ num_ctx: 16384 } && { options }` is the object `{ options }`. Second, spreading `undefined` (or `false`, or `null`) into an object literal is allowed and adds nothing: `{ ...undefined }` is `{}`. Put together, the first request has no `options` at all, and the server uses its default window.
 
 4. Run it, send each file, and compare `prompt_eval_count` and the answer:
 
@@ -305,7 +361,7 @@ What we measured (Ollama 0.35, `qwen3.5:4b`, 16 GB Mac): without `num_ctx`, **HT
 
 ### 7.5 Fill in the mapping table — Core
 
-In `notes/day-07.md`, filled in **from your captures**:
+This table is the specification for tomorrow's translator: every row is one conversion the provider will make. In `notes/day-07.md`, filled in **from your captures**:
 
 | Internal (harness) | Ollama wire |
 |---|---|
@@ -340,6 +396,12 @@ Ollama also speaks OpenAI's format at `/v1/chat/completions`. Send the same tool
 Day 21 builds a provider for this dialect.
 
 ## Check
+
+You now know Ollama's dialect from evidence rather than from documentation. You know where the text, the thinking and the tool calls live, that `done_reason` says `stop` even after a tool call, and that a prompt too big for the window is cut without a word. Against that, you've fixed the harness's own vocabulary as types, which every module from here on will import.
+
+Tomorrow you write the translator between the two. Day 8's `OllamaProvider` is the only code in the harness that knows Ollama's field names, and it's tested against captures like the ones you made today.
+
+Before you move on, check:
 
 - [ ] The four fixtures are captured, and `node --test tests/course/day07-*` passes on **your** captures (or every deviation is documented)
 - [ ] `notes/day-07.md`: the mapping table, the round-trip result and your silent-truncation numbers
@@ -382,11 +444,11 @@ Read the assertion. If your server really does behave differently (for example, 
 
 ## Common mistakes
 
-- Parsing the stream as SSE (looking for `data:`).
-- Reading tool calls from the final `done` chunk.
-- Deciding whether the model called a tool from `done_reason`. Ollama says `stop` either way; look for `tool_calls`.
-- Letting wire names (`tool_calls`, `tool_name`, `done_reason`) leak past the provider into the rest of the harness.
-- Trusting the API docs over your own captures.
+- **Parsing the stream as SSE (looking for `data:`).** Ollama's native endpoint sends NDJSON, plain JSON lines with no prefix. SSE is what its OpenAI-compatible endpoint sends (7.7).
+- **Reading tool calls from the final `done` chunk.** Each call arrives once, in an earlier chunk, and the `done` chunk doesn't repeat it.
+- **Deciding whether the model called a tool from `done_reason`.** Ollama says `stop` either way, so look for `tool_calls`.
+- **Letting wire names (`tool_calls`, `tool_name`, `done_reason`) leak past the provider into the rest of the harness.** Each leak is one more place that breaks when you add a second provider.
+- **Trusting the API docs over your own captures.** Docs describe what a server was meant to do, when they were written. A capture shows what it does today.
 
 ## Self-check
 
