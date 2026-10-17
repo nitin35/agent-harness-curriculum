@@ -13,17 +13,21 @@ $ node scripts/smoke-provider.js
 ✔ abort → AbortError
 ```
 
-`src/provider/ollama.js` turns harness messages into Ollama requests, and Ollama JSON into a `ChatResponse`. It always asks for a real context window, it knows the window it will *actually* get, and it fails with sentences a human can act on.
+Five live checks against your own Ollama, all green: a plain answer, a real tool call, the model's true window, a helpful message for a wrong model name, and a clean abort. Behind them is `src/provider/ollama.js`, which turns harness messages into Ollama requests and Ollama JSON into a `ChatResponse`. It always asks for a real context window, it knows the window it will *actually* get, and it fails with sentences a human can act on.
 
 ## Why it matters
 
-From today, nothing above `src/provider/` ever sees an Ollama field name. That boundary is what makes Day 21's second provider a one-file job. And "TypeError: fetch failed" is not an error message. *"Cannot reach Ollama at http://localhost:11434 — is Ollama running? (`ollama serve`)"* is.
+Yesterday you captured Ollama's dialect and wrote down the harness's own vocabulary as types. Today you write the one piece of code that speaks both: the provider.
+
+From today, nothing above `src/provider/` ever sees an Ollama field name. The loop, the sessions and the UI all work in the harness's vocabulary, and the provider translates at the boundary. That boundary is what makes Day 21's second provider a one-file job.
+
+The provider is also where the outside world fails, so it's where failures have to become useful. Compare two messages for the same problem. "TypeError: fetch failed" tells you something went wrong somewhere. *"Cannot reach Ollama at http://localhost:11434 — is Ollama running? (`ollama serve`)"* tells you what to do. The difference is a few lines of code, written once, here.
 
 ## Concepts
 
 ### 1. The provider is a translator
 
-**It translates in both directions.** On the way out, it turns the harness's messages and tools into an Ollama request. On the way back, it turns Ollama's JSON into a `ChatResponse`, the harness's own shape (Day 7's schemas):
+The provider translates in both directions. On the way out, it turns the harness's messages and tools into an Ollama request. On the way back, it turns Ollama's JSON into a `ChatResponse`, the harness's own shape (Day 7's schemas):
 
 ```mermaid
 flowchart LR
@@ -31,7 +35,19 @@ flowchart LR
   W -->|fromWireResponse| R["ChatResponse"]
 ```
 
-**Keep the translation in pure functions.** A *pure* function's result depends only on its arguments: it doesn't fetch, read files, or remember anything between calls. Keep the mapping in **pure exported functions**: `toWireMessages`, `toWireTools`, `fromWireResponse` and `fromWireToolCall`. Pure functions are trivial to test, because a test calls them with data and checks the data that comes back, with no server and no fakes. The class does the I/O (the HTTP requests and the error handling) around them.
+**Keep the translation in pure functions.** A *pure* function's result depends only on its arguments. It doesn't fetch, read files, or remember anything between calls, so the same input always gives the same output. Compare two ways to convert a temperature:
+
+```js
+const toCelsius = (f) => ((f - 32) * 5) / 9;          // pure: nothing but the argument goes in
+
+function toCelsiusLogged(f) {                         // not pure: it also writes to a file
+  const c = ((f - 32) * 5) / 9;
+  fs.appendFileSync('conversions.log', `${f}°F = ${c}°C\n`);
+  return c;
+}
+```
+
+Testing the first is one line: call it, check the answer. Testing the second needs a file to write to, and a way to check and clean up that file. So the provider keeps the mapping in **pure exported functions**: `toWireMessages`, `toWireTools`, `fromWireResponse` and `fromWireToolCall`. A test calls them with data and checks the data that comes back, with no server and no fakes. The class does the I/O (the HTTP requests and the error handling) around them.
 
 Here is Day 7's conversation going out through `toWireMessages`:
 
@@ -67,11 +83,13 @@ fromWireResponse(capture, 'qwen3.5:4b')
 //   }
 ```
 
-Everything Ollama-specific is gone: `function` nesting, `done_reason`, `prompt_eval_count`. Notice `finishReason: 'tool_calls'`, even though the wire said `"stop"` (Day 7): the provider decides it from the calls themselves.
+Everything Ollama-specific is gone: the `function` nesting, `done_reason`, `prompt_eval_count`. Notice `finishReason: 'tool_calls'`, even though the wire said `"stop"` (Day 7). The provider decides it from the calls themselves, so code above it never has to know Ollama's quirk.
+
+That's the translation. The next question is what the provider puts in every request it sends.
 
 ### 2. Every request carries `num_ctx` and `num_predict`, and `think` when the model can use it
 
-One method builds every request body, so no request can forget a setting:
+Day 7 showed what happens when a request forgets `num_ctx`: nothing fails, and the model quietly loses the start of the prompt. The safest way to make sure no request forgets a setting is to have exactly one place that builds request bodies:
 
 ```js
 buildRequest(messages, tools, { stream }) {
@@ -101,7 +119,7 @@ For a plain question, with the defaults, it produces:
 
 What each setting is for:
 - **`num_ctx`** asks for the context window. Without it, Ollama runs with its own small default and silently drops the start of a long prompt (Day 7).
-- **`num_predict` caps the reply** (default: the context window). Ollama's own default is *unlimited*: when the window fills, it shifts the context and keeps generating. A model that runs away never stops. We watched `llama3.2:1b` go past 5 minutes, until Node's `fetch` gave up (concept 4).
+- **`num_predict`** caps the reply (default: the context window). Ollama's own default is *unlimited*: when the window fills, it shifts the context and keeps generating. A model that runs away never stops. We watched `llama3.2:1b` go past 5 minutes, until Node's `fetch` gave up (concept 4).
 - **`think`** asks a thinking model to reason before answering (Day 4). `#noThink` is the set of models that have rejected `think` (concept 4). The course model thinks, so normally `think` is always sent.
 - **`tools`** is left out entirely when there are none, rather than sent as an empty list.
 
@@ -109,7 +127,7 @@ What each setting is for:
 
 ### 3. Arguments become an object at the boundary, and never later
 
-**Parse once, at the edge.** Day 7 showed that one server sends arguments as an object and another as a JSON string. `parseArguments(raw)` lives in `src/provider/parse-arguments.js`, and it makes them all the same:
+Day 7 showed that one server sends a tool call's arguments as an object and another as a JSON string. If that difference got past the provider, every tool would need to check which one it had received, and one day one of them would forget. So the provider settles it at the edge, once. `parseArguments(raw)` lives in `src/provider/parse-arguments.js`, and it makes them all the same:
 - an object passes through;
 - a string is parsed **once**;
 - broken JSON **never throws**. It returns `{ arguments: {}, parseError: '…' }`, so Day 12's loop can tell the model *"your arguments were invalid, retry"* instead of crashing.
@@ -125,16 +143,56 @@ parseArguments('[1,2]')
 
 The wording of `parseError` is yours to choose. What matters is that it says what was wrong, because the model reads it. Broken arguments come from the model, so they are an operational error (Day 5): a result to report, not a reason to crash. Day 9 writes the policy, and Day 12's loop carries it out.
 
-**Every call needs an id.** The harness pairs each tool result with its call by `id` (Day 7). Keep the server's `id`, or generate `call_<random>` with `crypto.randomUUID()` when it's missing:
+Every call also needs an id. The harness pairs each tool result with its call by `id` (Day 7). Keep the server's `id`, or generate `call_<random>` with `crypto.randomUUID()` when it's missing:
 
 ```js
 fromWireToolCall({ function: { name: 'bash', arguments: { command: 'ls' } } })
 // → { id: 'call_d6a623d1', name: 'bash', arguments: { command: 'ls' } }   (random each time)
 ```
 
+So far everything has gone right. The rest of the provider is about what happens when it doesn't.
+
 ### 4. Error taxonomy
 
-**Two ways a request can fail.** Either `fetch` rejects, so no response arrived at all (the server is down, or the wait was too long). Or `fetch` resolves with a response whose `ok` is `false`, so the server answered with an error status. Day 3 showed that an HTTP error status alone never makes `fetch` reject. The provider checks both paths, and turns each failure into a `ProviderError` (Day 5) whose `kind` says what happened and whose message says what to do:
+To sort failures, you first need to know exactly what `await fetch(url)` can do, because it can go wrong in two quite different ways.
+
+**What `fetch` waits for.** An HTTP response has two parts: the *headers*, which include the status code, and then the *body*. The promise `fetch` returns settles as soon as the headers have arrived. Reading the body is a second, separate wait: `await res.json()` or `await res.text()`. Here is a small local server that sends its headers at once and its body 300 ms later, and a second route that holds back the headers too:
+
+```js
+import http from 'node:http';
+
+const server = http.createServer((req, res) => {
+  const late = req.url === '/late';
+  if (!late) {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.flushHeaders();                                  // send the headers now
+  }
+  setTimeout(() => {
+    if (late) res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"done":true}');                            // the body, 300 ms later
+  }, 300);
+});
+await new Promise((resolve) => server.listen(0, resolve));
+const { port } = server.address();
+
+for (const path of ['/early', '/late']) {
+  const start = Date.now();
+  const res = await fetch(`http://localhost:${port}${path}`);
+  const headersAt = Date.now() - start;
+  await res.json();
+  const bodyAt = Date.now() - start;
+  console.log(`${path}: fetch settled after ${headersAt} ms, body read after ${bodyAt} ms`);
+}
+server.close();
+// → /early: fetch settled after 12 ms, body read after 317 ms
+// → /late: fetch settled after 306 ms, body read after 307 ms
+```
+
+(Your times will differ by a few milliseconds.)
+
+So `fetch`'s own promise tells you only that *a response has started*. It fulfils with a `Response` whatever the status code. A 404 or a 500 is still a response (Day 3). It rejects only when no response arrives at all.
+
+**Two ways a request can fail.** Either `fetch` rejects, so no response arrived at all (the server is down, or the wait was too long). Or `fetch` fulfils with a response whose `ok` is `false`, so the server answered with an error status. The provider checks both paths, and turns each failure into a `ProviderError` (Day 5) whose `kind` says what happened and whose message says what to do:
 
 | Failure | How you detect it | What the provider does | Message must mention |
 |---|---|---|---|
@@ -156,17 +214,19 @@ bad_response     Unexpected response from Ollama: received an object with keys [
 http             Ollama answered HTTP 500: {"error":"llama runner process has terminated"}
 ```
 
-**Abort is not a failure.** It's the user's choice, and Day 13 treats it as a clean stop. If the provider wrapped it in a `ProviderError`, every Ctrl+C would print "the provider failed".
+Abort is not a failure. It's the user's choice, and Day 13 treats it as a clean stop. If the provider wrapped it in a `ProviderError`, every Ctrl+C would print "the provider failed".
 
-**The 5-minute row needs a closer look.** A non-streaming reply arrives all at once, so Ollama sends the response headers only when the model has finished. Node's `fetch` waits at most 300 seconds for headers. So a long generation looks exactly like a network failure, `fetch failed`, after five minutes, even though the server is fine. Its `err.cause.code` tells them apart. `num_predict` (concept 2) and streaming (Day 16) are the real fixes.
+The 5-minute row is the `/late` route above, stretched out. With `stream: false`, Ollama sends the headers only when the model has finished. `fetch`'s promise stays pending the whole time. Node's `fetch` waits at most 300 seconds for headers, and then rejects with `fetch failed`, exactly as if the network had gone down, even though the server is fine and still working. Only `err.cause.code` tells the two apart. `num_predict` (concept 2) and streaming (Day 16), which sends headers at once, are the real fixes.
 
-**Matching text, once.** The thinking and glitch rows are the one place the provider matches the server's *text*: Ollama gives those errors no code. It happens once, at the boundary, and turns into state (`#noThink`) or a precise error kind, so nothing above the provider ever routes on message text.
+The thinking and glitch rows are the one place the provider matches the server's *text*, because Ollama gives those errors no code. It happens once, at the boundary, and turns into state (`#noThink`) or a precise error kind, so nothing above the provider ever routes on message text (Day 5).
 
-**Why no automatic retry for a glitch?** Sampling is random, so "just ask again" sounds right. We measured it on `qwen2.5:0.5b`: the two glitches it met both came straight back on the retry, which doubled the wait for nothing. Measure before you add a retry (Stretch 8.5).
+Why no automatic retry for a glitch? Sampling is random, so "just ask again" sounds right. We measured it on `qwen2.5:0.5b`: the two glitches it met both came straight back on the retry, which doubled the wait for nothing. Measure before you add a retry (Stretch 8.5).
 
 ### 5. `getModelInfo()`: the window you will really get
 
-**Read the model's maximum from `/api/show`.** `POST /api/show` returns `model_info` with a key ending in `.context_length`. Its prefix depends on the model family (`qwen35.`, `llama.`, `gemma3.`), so **match by suffix**:
+The last job is to answer a question every later budget depends on: how big is the window, really?
+
+Read the model's maximum from `/api/show`. `POST /api/show` returns `model_info` with a key ending in `.context_length`. Its prefix depends on the model family (`qwen35.`, `llama.`, `gemma3.`), so **match by suffix**:
 
 ```js run
 const info = { 'general.architecture': 'qwen35', 'qwen35.context_length': 262144 };   // from /api/show
@@ -186,11 +246,13 @@ info[key]                               // → 262144
 }
 ```
 
-For the course model with the default window, that's `maxContext: 262144` and `contextLimit: 8192`: the *By tonight* line "max 262144, using 8192". A model trained for only 4096 tokens, asked for 8192, gets `contextLimit: 4096`. Budgeting against the bigger number would let the conversation grow past what the server can really hold.
+For the course model with the default window, that's `maxContext: 262144` and `contextLimit: 8192`: the *By tonight* line "max 262144, using 8192". A model trained for only 4096 tokens, asked for 8192, gets `contextLimit: 4096`. Budgeting against the bigger number would let the conversation grow past what the server can really hold, straight into Day 7's silent truncation.
 
 If there is no `context_length` key, call `onWarn(…)` loudly and use `contextWindow`. A silent guess here quietly breaks compaction on Day 25.
 
 ## Build
+
+Build from the inside out. The pure mapping functions come first, because they need nothing but data and they're the easiest part to get exactly right. Then the class wraps them in I/O and error handling. Then the course tests, and last a live check against your own Ollama.
 
 **Files today:** `src/provider/parse-arguments.js`, `src/provider/ollama.js` and `scripts/smoke-provider.js`.
 
@@ -219,7 +281,7 @@ Rules for `fromWireResponse`:
 - `finishReason` is `'tool_calls'` when there are calls, otherwise `done_reason`;
 - `usage = { promptTokens: prompt_eval_count, completionTokens: eval_count }`.
 
-A `switch` on `m.role` keeps `toWireMessages` readable: one `case` per role, returning the wire shape for that role.
+A `switch` on `m.role` keeps `toWireMessages` readable: one `case` per role, returning the wire shape for that role. Keep your Day 7 mapping table open while you write these. Each of its rows should turn into a line or two here.
 
 ### 8.2 The class — Core
 
@@ -267,7 +329,7 @@ if (!res.ok) {
 return res;
 ```
 
-`fetch` is **injected** (Day 5's pattern), which is how the course tests fake every failure without a server.
+`fetch` is **injected** (Day 5's pattern), which is how the course tests fake every failure without a server. A fake that rejects with `ECONNREFUSED`, one that answers 404, one that returns garbage: each row of concept 4's table becomes a test that runs in a millisecond.
 
 ### 8.3 Course tests — Core
 
@@ -296,13 +358,19 @@ console.log('✔ plain chat:', JSON.stringify(plain.content),
   `(${plain.usage?.promptTokens} prompt tokens)`);
 ```
 
-Run `node scripts/smoke-provider.js`. Then stop Ollama and run it again: you should see the *ollama serve* message. Commit `day-08: OllamaProvider`.
+Run `node scripts/smoke-provider.js`. Then stop Ollama and run it again: you should see the *ollama serve* message. That second run is the point of the day. You've seen the failure a user will meet most often, and the provider tells them how to fix it. Commit `day-08: OllamaProvider`.
 
 ### 8.5 Retry with backoff — Stretch
 
 Add an optional `retries` option: retry `unreachable` and HTTP 5xx server faults up to N times, with exponential backoff (`200 ms × 2^attempt`). The backoff wait must be **abortable**. Never retry `model_not_found` or `bad_response`. Write a test with a fake `fetch` that fails twice and then succeeds. Then measure: does a retry ever rescue a real failure on your machine? Keep it only if it does.
 
 ## Check
+
+The harness can now talk to a model. The provider translates in both directions in pure functions you can test with plain data, and it sends the settings that stop Ollama from quietly cutting a prompt or generating forever. It knows the window it will really get, and it turns every way the network and the server fail into an error that says what to do, while letting an abort pass through untouched. From here on, nothing else in the harness needs to know that Ollama exists.
+
+Tomorrow's subject is the other side of a tool call. Day 9 fixes the rules every tool follows, what it declares and what it returns, and builds the registry that holds them.
+
+Before you move on, check:
 
 - [ ] `node --test tests/course/day08-*` green (20 tests)
 - [ ] `node scripts/smoke-provider.js` passes against live Ollama, and prints the *ollama serve* hint when Ollama is stopped
@@ -350,11 +418,11 @@ A private field has to be declared in the class body before any method uses it: 
 
 ## Common mistakes
 
-- Wrapping `AbortError` in a `ProviderError` ("the provider failed"). Abort isn't a failure.
-- Hard-coding `llama.context_length` (your model's key is `qwen35.context_length`).
-- Asserting on the model's prose in smoke tests.
-- Throwing on broken tool arguments, or parsing them again later "to be safe". Parse once, at the boundary, and report a `parseError`.
-- Budgeting against the model's maximum (262144) when the server runs with your `num_ctx` (8192).
+- **Wrapping `AbortError` in a `ProviderError`.** Every Ctrl+C then reports "the provider failed", and code above can no longer tell a user's choice from a real failure.
+- **Hard-coding `llama.context_length`.** The prefix depends on the model family, and your model's key is `qwen35.context_length`, so match by suffix.
+- **Asserting on the model's prose in smoke tests.** The wording changes from run to run, so the test fails at random. Assert structure: an id, a name, object arguments.
+- **Throwing on broken tool arguments, or parsing them again later "to be safe".** Broken arguments are the model's mistake, and it can fix them if it's told. Parse once, at the boundary, and report a `parseError`.
+- **Budgeting against the model's maximum (262144) when the server runs with your `num_ctx` (8192).** The conversation grows past what the server really holds, and the start of the prompt is silently dropped (Day 7).
 
 ## Self-check
 
