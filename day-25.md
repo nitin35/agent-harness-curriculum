@@ -20,7 +20,7 @@ Long conversations no longer fall off the end of the window. When the prompt pas
 
 ## Why it matters
 
-Previously, on Day 24, the harness learned to measure its window: a calibrated count of every prompt, a budget with a reserve for the reply, and an 80% line it now knows it has crossed. Knowing isn't enough, though. Past that line, something has to make the conversation smaller, or the next few turns run it into the end of the window.
+Day 24 taught the harness to measure its window: a calibrated count of every prompt, a budget with a reserve for the reply, and an 80% line it now knows it has crossed. Knowing isn't enough, though. Past that line, something has to make the conversation smaller, or the next few turns run it into the end of the window.
 
 Without compaction, a long session with an 8k window dies one of two ways:
 - **Hosted APIs** reject the request (400).

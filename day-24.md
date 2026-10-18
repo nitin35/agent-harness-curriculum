@@ -25,7 +25,7 @@ The harness knows how full its window is, builds a deterministic system prompt t
 
 ## Why it matters
 
-Previously, on Day 23, MCP servers joined the harness, and every tool they bring arrives with a schema the model has to read. Tools, history, instructions and the reply all share one fixed window, and so far nothing in the harness has been keeping count.
+MCP servers joined the harness yesterday, and every tool they bring arrives with a schema the model has to read. Tools, history, instructions and the reply all share one fixed window, and so far nothing in the harness has been keeping count.
 
 The context window is the agent's working memory, and everything competes for it: the system prompt, tool schemas (651 tokens before you've said a word!), history, and room for the reply. Good harnesses spend those tokens deliberately. Anthropic calls this *context engineering*. Today you measure the window, fill it in a stable order (so servers can cache it), and add two of the field's most useful conventions.
 

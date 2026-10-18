@@ -22,7 +22,7 @@ What you can't see in a transcript matters as much. Ctrl+C stops a run without k
 
 ## Why it matters
 
-Previously, on Day 14, the loop's events got one vocabulary, a bus to carry them and a printer to show them. The trace script printed every event of a run, but you still drove the engine from a script: one question, one run, then the program ended.
+Yesterday the loop's events got one vocabulary, a bus to carry them and a printer to show them. The trace script printed every event of a run, but you still drove the engine from a script: one question, one run, then the program ended.
 
 A person at a keyboard doesn't work that way, and the difference is all about timing. You ask a question and the model starts a slow `bash` command. While you wait, you think of a follow-up and type it. With a script there was nobody to type, but now that line arrives in the middle of a run, and something has to decide what it means. Then the approval question appears, and you answer `y`, but if two parts of the program are reading the keyboard, your `y` can also go to the model as a message. Then you change your mind and press Ctrl+C: does that stop the run, or the whole program, and what happens to the follow-up you typed? And when Ollama goes away mid-run, does the prompt come back, or is the terminal left looking alive while it ignores you?
 

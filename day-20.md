@@ -24,7 +24,7 @@ The approval question has a third answer now. The first `npm test` is answered `
 
 ## Why it matters
 
-Previously, on Day 19, the harness learned to resume a conversation. Since Day 12 every risky tool call has asked you first, and since Day 15 the question has come through the UI. That's safe, and in a long session it's exhausting.
+Yesterday the harness learned to resume a conversation. Since Day 12 every risky tool call has asked you first, and since Day 15 the question has come through the UI. That's safe, and in a long session it's exhausting.
 
 A y/N prompt on every command is safe but tiring, and tired people press `y` without reading. Picture the twentieth question of an afternoon, after nineteen harmless `npm test`s and `git status`es. The twentieth looks the same at a glance, and you answer it the same way. That is exactly how harnesses get people hurt. Real harnesses (Claude Code, Codex CLI, Gemini CLI) all combine three things:
 - **rules** that pre-approve the boring, safe things and block the dangerous ones;

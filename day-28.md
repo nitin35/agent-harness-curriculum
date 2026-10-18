@@ -27,7 +27,7 @@ These are the last everyday-UX features: attach files by typing `@`, Tab-complet
 
 ## Why it matters
 
-Previously, on Day 27, you attacked your own harness and turned every defense into a test. Today adds the last everyday features, and the first of them is a new way for data to reach the model, so it inherits the same defenses from the start.
+Yesterday you attacked your own harness and turned every defense into a test. Today adds the last everyday features, and the first of them is a new way for data to reach the model, so it inherits the same defenses from the start.
 
 `@file` is the fastest way to give a model exactly the context it needs. It's also another way for data to reach the model, so it gets **the same jail, the same binary check and the same truncation contract** as `read`. And before you ship (Day 30), you want one suite that proves every subsystem still works **together**.
 

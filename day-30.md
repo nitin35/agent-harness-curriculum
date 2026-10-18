@@ -23,7 +23,7 @@ A harness someone else can install, read, extend and trust, plus one feature tha
 
 ## Why it matters
 
-Previously, on Day 29, you measured the harness with evals and saved every trial. That was the last new subsystem. Today nothing new goes into the engine. The work is making what's there usable by someone who wasn't here for the thirty days: a stranger who clones the repository, runs one command, and decides from what happens whether to keep reading.
+Yesterday you measured the harness with evals and saved every trial. That was the last new subsystem. Today nothing new goes into the engine. The work is making what's there usable by someone who wasn't here for the thirty days: a stranger who clones the repository, runs one command, and decides from what happens whether to keep reading.
 
 Shipping is making every contract visible:
 - a demo that runs anywhere;

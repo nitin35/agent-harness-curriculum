@@ -25,7 +25,7 @@ Your harness is now a real command: layered settings, a log file, readable error
 
 ## Why it matters
 
-Previously, on Day 25, the harness reached Checkpoint 3, and Buffer 2 made sure everything under it holds. But you still start it as `node src/cli/main.js` from its own folder, configure it with environment variables (`AH_PROVIDER`, `AH_STREAM`, `AH_MCP_CONFIG`), and when something goes wrong, nothing has been written down.
+The harness reached Checkpoint 3 on Day 25, and Buffer 2 made sure everything under it holds. But you still start it as `node src/cli/main.js` from its own folder, configure it with environment variables (`AH_PROVIDER`, `AH_STREAM`, `AH_MCP_CONFIG`), and when something goes wrong, nothing has been written down.
 
 A harness other people can run needs:
 - configuration that composes (your defaults, a project's preferences, today's flags);

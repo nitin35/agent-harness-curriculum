@@ -21,7 +21,7 @@ You'll have an eval runner with real tasks, real checkers, multiple trials, hone
 
 ## Why it matters
 
-Previously, on Day 28, an integration suite proved that the whole pipeline works together. Every one of those tests uses a scripted model, so they always give the same answer, and that's what makes them tests. They tell you nothing about how well a real model does inside your harness. Today measures that.
+Yesterday's integration suite proved that the whole pipeline works together. Every one of those tests uses a scripted model, so they always give the same answer, and that's what makes them tests. They tell you nothing about how well a real model does inside your harness. Today measures that.
 
 "It worked when I tried it" is an anecdote. Agents are **non-deterministic**: the same prompt passes on Monday and fails on Tuesday. Evals turn "seems fine" into numbers you can compare across models, prompts and harness changes, and the right numbers tell you different things. Look at `quote-line` above:
 - it **can** do it: one of three attempts usually works (pass@3 = 100%);

@@ -25,7 +25,7 @@ Plugins can add tools, commands and listeners. Code that came **with a repositor
 
 ## Why it matters
 
-Previously, on Day 21, a second provider slotted in without the loop changing, which proved the seam. Today the harness opens up in a different direction: to code that isn't yours.
+Yesterday a second provider slotted in without the loop changing, which proved the seam. Today the harness opens up in a different direction: to code that isn't yours.
 
 Extensions are how a harness grows without its core growing (Pi is built around this idea). But an extension is **code running in your process with your permissions**. Here is how that goes wrong. You clone a repository to look at it, `cd` into it and start the harness, because you want to ask the agent about the code. If the harness auto-loads `.agent-harness/extensions/*.js` from the current directory, then `git clone evil-repo && cd evil-repo && agent-harness` runs the attacker's code before you've typed anything. No approval prompt appears, because no tool was called, and the jail doesn't apply, because nothing went through a tool. The trust model comes first, and you write it first.
 

@@ -19,7 +19,7 @@ The real harness streams thinking and answers live, tool calls work exactly as b
 
 ## Why it matters
 
-Previously, on Day 15, the harness became something you can talk to: one owner of the keyboard, a queue for lines typed mid-run, and a Ctrl+C that stops the work before it stops the session. But every answer still arrives in one piece. The provider waits for the whole reply before returning it, so while the model thinks and writes you see nothing at all. For a model that thinks before it answers, that pause can be long, and a blank screen looks exactly like a hung program.
+Yesterday the harness became something you can talk to: one owner of the keyboard, a queue for lines typed mid-run, and a Ctrl+C that stops the work before it stops the session. But every answer still arrives in one piece. The provider waits for the whole reply before returning it, so while the model thinks and writes you see nothing at all. For a model that thinks before it answers, that pause can be long, and a blank screen looks exactly like a hung program.
 
 You did streaming on the toy (Day 4). Now it goes into the provider *interface*, without breaking anything built since, and that's harder than it sounds. The tempting way is to write a streaming copy of the loop next to the old one. Then every fix has to be made twice, and sooner or later one copy misses it: a tool-call bug that only happens live, or an abort that works in tests but not in the terminal. So the rule for today is **parity**: a streamed turn must end in the **same** `ChatResponse` as a non-streamed one and go through **the same** tool loop. Two loops would mean two behaviours, and bugs that only show up live.
 

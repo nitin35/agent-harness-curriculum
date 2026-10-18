@@ -20,7 +20,7 @@ There are two separate programs in this transcript. The first one hears about bl
 
 ## Why it matters
 
-Previously, on Day 17, every run started going to disk, and on Day 18 the harness got commands of its own, including `/new`. The conversations are saved, but nothing reads them back yet. Every start is a fresh session.
+On Day 17 every run started going to disk, and yesterday the harness got commands of its own, including `/new`. The conversations are saved, but nothing reads them back yet. Every start is a fresh session.
 
 Persistence is only real if the **model** remembers, not only the screen. Here's how resume goes wrong in a way that looks right. The harness starts, finds yesterday's session, and prints the old conversation, so the terminal shows everything you said. Then you ask a follow-up, the harness calls `loop.run(message)` with **empty history**, and the model has no idea what you're talking about. The UI looks resumed, but the model starts from scratch. It's the classic bug, and it survives any check that only looks at the screen.
 

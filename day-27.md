@@ -23,7 +23,7 @@ Read it in two parts. The first three lines happen before the model has said a w
 
 ## Why it matters
 
-Previously, on Day 26, the harness became a real command, and its settings loader learned to refuse a repository's dangerous keys by name. Since Day 10 you've been building defenses one at a time: the jail, the approval gate, permission rules, trust prompts, global-only MCP servers. Each one was tested on its own. Today they're tested together, by someone trying to get past them.
+Yesterday the harness became a real command, and its settings loader learned to refuse a repository's dangerous keys by name. Since Day 10 you've been building defenses one at a time: the jail, the approval gate, permission rules, trust prompts, global-only MCP servers. Each one was tested on its own. Today they're tested together, by someone trying to get past them.
 
 Prompt injection is the defining security problem of agents, and **it is not solved at the model level**. Any text your agent reads (READMEs, issues, web pages, tool output, MCP tool descriptions) can contain instructions, and models follow instructions. Simon Willison's *lethal trifecta* names the danger:
 

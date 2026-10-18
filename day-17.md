@@ -19,7 +19,7 @@ Every run is written to disk when it ends, one line per message, even a run that
 
 ## Why it matters
 
-Previously, on Day 16, the harness reached Checkpoint 2: it streams, it handles tools and Ctrl+C, and it remembers the conversation. But it remembers in memory only, in the bridge's `history` array. Quit, close the terminal or crash, and the conversation is gone. A harness that forgets everything on Ctrl+C is a toy.
+Yesterday's Checkpoint 2 left you with a harness that streams, handles tools and Ctrl+C, and remembers the conversation. But it remembers in memory only, in the bridge's `history` array. Quit, close the terminal or crash, and the conversation is gone. A harness that forgets everything on Ctrl+C is a toy.
 
 Today you build the storage, and the hard part isn't writing a file. It's writing one that's still usable after the program dies at the worst moment, halfway through a line, or between two writes that belonged together. Picture an hour-long session that ends in a crash, and a file that now opens to a conversation with everything before the crash missing. Nothing threw an error; the file was simply left in a state the code didn't expect. Today's design makes each of those states either impossible or harmless.
 

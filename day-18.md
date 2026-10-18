@@ -28,7 +28,7 @@ The harness can now talk about *itself*. Lines starting with `/` never reach the
 
 ## Why it matters
 
-Previously, on Day 17, sessions went to disk, so a conversation now outlives the program. But the only way to control the harness itself is still to quit and start it again. You can't ask which session you're in, start a fresh one, or try a different model without restarting.
+Since yesterday, sessions go to disk, so a conversation outlives the program. But the only way to control the harness itself is still to quit and start it again. You can't ask which session you're in, start a fresh one, or try a different model without restarting.
 
 Every real harness has commands for this: `/help`, `/model`, `/clear`, `/resume`, `/compact`. They're also the main way extensions (Day 22) add features, and that's where a careless design shows. If the router is a chain of `if`s, every new command means editing it, and an extension can't add one at all without changing your code. The design is a **dispatch table**: adding a command means one registration, never another `if` branch in the router.
 

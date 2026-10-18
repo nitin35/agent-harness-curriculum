@@ -17,7 +17,7 @@ The **same** harness (loop, tools, sessions, approvals) now talks to any server 
 
 ## Why it matters
 
-Previously, on Day 20, the harness got an approval gate with rules and modes. Everything you've built since Day 8 has talked to the model through one interface: `chat()`, `chatStream()` and the `ChatResponse` they return. You've been told that this boundary keeps every provider's quirks inside `src/provider/`. Until there's a second provider, that's only a claim.
+Yesterday the harness got an approval gate with rules and modes. Everything you've built since Day 8 has talked to the model through one interface: `chat()`, `chatStream()` and the `ChatResponse` they return. You've been told that this boundary keeps every provider's quirks inside `src/provider/`. Until there's a second provider, that's only a claim.
 
 So today does two things. **First, it proves your seam.** If adding a provider needs changes above `src/provider/`, the boundary leaked, and today you find out. A leak usually looks harmless where it starts: a field name read in the loop, a check on a provider-specific error string in the UI. Each one means the next provider has to touch that code too.
 

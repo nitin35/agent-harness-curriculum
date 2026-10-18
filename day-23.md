@@ -22,7 +22,7 @@ Your harness can now use tools from **any** MCP server (thousands exist) through
 
 ## Why it matters
 
-Previously, on Day 22, the harness learned to load extensions: other people's code, running inside your own process, behind a trust prompt. MCP brings in other people's tools a different way. Their code runs in a separate program, and your harness only ever talks to it through a pipe.
+Since yesterday the harness can load extensions: other people's code, running inside your own process, behind a trust prompt. MCP brings in other people's tools a different way. Their code runs in a separate program, and your harness only ever talks to it through a pipe.
 
 The **Model Context Protocol** is how tools are shared between harnesses now. A server written once (for GitHub, a database, a browser, your company's API) works in Claude Code, Codex, Cursor, VS Code, and from tonight, yours. The spec moved to a **stateless** design in revision `2026-07-28`. Building a client teaches you JSON-RPC, child-process protocols, cancellation, and why "a server's description of its own tool" is untrusted input.
 
