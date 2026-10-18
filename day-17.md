@@ -126,13 +126,57 @@ console.log(diary.join(' → '));
 
 Started together, the three writes run side by side and finish shortest first, so the diary reads Tuesday, Wednesday, Monday. Chained, they finish in the order they were queued. The chain works because of what `.then` returns. `queue.then(fn)` creates a *new* promise, and `fn` runs only after `queue` has fulfilled. If `fn` returns a promise, as `write` does, the new promise waits for that one too, so it settles only when the write has really finished. Storing the new promise back in `queue` means the next `enqueue` attaches to the end of the chain. And `enqueue` itself never waits: it returns at once, and the caller can `await` the promise it gets back, or not.
 
-So chain writes through one promise queue:
+That chain has one weakness, and it's serious. If one link rejects, `.then(fn)` on that rejected promise doesn't run `fn`. It passes the rejection along instead, so every link after the failure is rejected without running. One failed write, from a full disk, say, and the queue never writes again. Here's the diary again, with Tuesday's write failing, once with the plain chain and once with a queue that survives the failure:
 
-```js
-this.#queue = this.#queue.then(() => appendJsonl(this.path, entry));   // each write waits for the last
+```js run
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function write(diary, day) {
+  await delay(5);
+  if (day === 'Tue') throw new Error('disk full');
+  diary.push(day);
+}
+
+// ✗ the plain chain: one failure, and nothing after it runs
+const lost = [];
+let queue = Promise.resolve();
+for (const day of ['Mon', 'Tue', 'Wed']) queue = queue.then(() => write(lost, day));
+await queue.catch((err) => console.log(`plain: ${err.message}`));
+console.log(`plain: the diary holds ${lost.join(', ')}`);
+
+// ✓ the caller hears about the failure, and the queue moves on
+const kept = [];
+let safeQueue = Promise.resolve();
+function enqueue(fn) {
+  const next = safeQueue.then(fn);
+  safeQueue = next.catch(() => {});
+  return next;
+}
+for (const day of ['Mon', 'Tue', 'Wed']) {
+  enqueue(() => write(kept, day)).catch((err) => console.log(`safe:  ${err.message}`));
+}
+await safeQueue;
+console.log(`safe:  the diary holds ${kept.join(', ')}`);
+// → plain: disk full
+// → plain: the diary holds Mon
+// → safe:  disk full
+// → safe:  the diary holds Mon, Wed
 ```
 
-`#queue` starts as `Promise.resolve()`. Each write is attached to the end of the chain, so it starts only when the previous one has finished, whichever order the callers ran in.
+The plain chain lost Wednesday, though nothing was wrong with Wednesday's write: it never ran. In the harness, every later save would fail with that same first error, even after you'd freed up the disk, because the queue never runs another write. The session would stop saving for the rest of the program while the conversation carried on.
+
+The fixed `enqueue` makes two promises from each write. `next` is the caller's: it rejects if the write fails, so whoever asked for the write hears about it. `next.catch(() => {})` is the queue's: it fulfils whatever happened, so the next link always runs. That `.catch(() => {})` looks like the empty `catch` Day 14 warned about, but it isn't one, because the error isn't thrown away. It still reaches the caller through `next`. The queue only declines to carry it forward.
+
+So every write goes through one small method on the session:
+
+```js
+#enqueue(fn) {
+  const next = this.#queue.then(fn);    // runs after the previous write; the caller awaits this one
+  this.#queue = next.catch(() => {});   // the queue moves on, even after a failure
+  return next;
+}
+```
+
+`#queue` starts as `Promise.resolve()`. Each write is attached to the end of the chain, so it starts only when the previous one has finished, whichever order the callers ran in. Appends and the atomic rewrite in `save()` both go through `#enqueue`, so a rewrite can never overlap an append.
 
 Python contrast: in `asyncio` you'd hold an `asyncio.Lock` around each write, and it also hands out turns in the order they were requested. C++ contrast: a `std::mutex` keeps two writes apart, but makes no promise about which waiting thread goes next. The promise chain gives you both properties at once: one write at a time, in queue order.
 
@@ -225,7 +269,7 @@ There is no "last session" file. The last session is the newest file, which can'
 
 Hints:
 - File name: `${createdAt with : and . replaced by -}_${id.slice(0, 8)}.jsonl`, so names sort by time.
-- Serialize writes: `#queue = #queue.then(fn)`.
+- Serialize writes through one `#enqueue(fn)` (concept 4): `const next = this.#queue.then(fn)`, store `next.catch(() => {})` back in `#queue`, and return `next`.
 - After `open()`, if `tornTail` was set, the first queued write appends `'\n'` before its record.
 
 Keep the entries twice in memory: an array in file order (for `getEntries`) and a `Map` from id to entry (so `getPath` can look up each parent quickly). `create()` writes nothing, so a harness you start and quit without chatting leaves no empty file behind.
@@ -277,7 +321,12 @@ Solution: `src/config/paths.js`, `src/shared/session.js` and `src/session/` in [
 
 <details><summary>My entries come back in the wrong order</summary>
 
-Two appends ran concurrently. Chain every write through one promise (`this.#queue = this.#queue.then(() => appendJsonl(…))`).
+Two appends ran concurrently. Chain every write through one promise queue, the `#enqueue(fn)` from concept 4.
+</details>
+
+<details><summary>After one failed write, nothing is saved any more</summary>
+
+The queue stores the rejected promise, so every later `.then(fn)` skips its write. Store `next.catch(() => {})` in `#queue` and return `next` to the caller (concept 4).
 </details>
 
 <details><summary>After a crash and a resume, the model forgot everything before the crash</summary>
