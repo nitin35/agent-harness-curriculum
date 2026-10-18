@@ -14,21 +14,27 @@ agent> OK
 agent> BLUEBIRD
 ```
 
+The fact is in the very first message, and by the time you ask about it, that message is no longer part of the conversation the model receives: `/compact` folded the two oldest messages into one compaction record. The model answers from that record, which kept the user's words. The `Compacted 2 messages` line is the only sign anything happened.
+
 Long conversations no longer fall off the end of the window. When the prompt passes 80% of the **real** window, the oldest part of the conversation is folded into a single compaction record. The protocol stays valid (no orphaned tool calls), the latest question is never lost, and nothing is deleted from the session file.
 
 ## Why it matters
+
+Previously, on Day 24, the harness learned to measure its window: a calibrated count of every prompt, a budget with a reserve for the reply, and an 80% line it now knows it has crossed. Knowing isn't enough, though. Past that line, something has to make the conversation smaller, or the next few turns run it into the end of the window.
 
 Without compaction, a long session with an 8k window dies one of two ways:
 - **Hosted APIs** reject the request (400).
 - **Ollama silently drops the start of the prompt** (Day 7). That includes your system prompt and tools, so the model starts acting strangely.
 
-Compaction is how every serious harness keeps going. Getting it *safe* is the hard part: cut in the wrong place and you leave a tool call without its result, which breaks the protocol for every provider.
+Compaction is how every serious harness keeps going. Getting it *safe* is the hard part: cut in the wrong place and you leave a tool call without its result, which breaks the protocol for every provider. And it's a bug that waits for the worst moment, because compaction only runs in long sessions, when the user has the most to lose.
+
+Today also closes Checkpoint 3: a harness whose protocol stays valid however long the conversation runs.
 
 ## Concepts
 
 ### 1. Strategies
 
-**Compaction replaces the oldest part of the conversation with something shorter.** History grows with every turn, and the window doesn't (Day 24), so sooner or later the oldest messages have to give way. The question is what takes their place:
+Compaction replaces the oldest part of the conversation with something shorter. History grows with every turn, and the window doesn't (Day 24), so sooner or later the oldest messages have to give way. The question is what takes their place:
 
 | Strategy | Cost | What you lose |
 |---|---|---|
@@ -38,7 +44,7 @@ Compaction is how every serious harness keeps going. Getting it *safe* is the ha
 
 Picture the *By tonight* session. BLUEBIRD is in the very first message. A sliding window drops that message first, and the model can no longer answer. A transcript keeps the words, shortened to fit. A summary keeps what the model judged important, at the price of an extra call. Stretch 25.7 compares the last two on this exact test.
 
-**Core writes a transcript.** Core folds the oldest part of the **active path** (`getPath()`, never `getEntries()`) into one entry whose `content` is a readable transcript (`user: …`, `assistant: [called bash {…}]`, `tool bash: …`). For a short session, the reference writes:
+Core writes a transcript. It folds the oldest part of the **active path** (`getPath()`, never `getEntries()`) into one entry whose `content` is a readable transcript (`user: …`, `assistant: [called bash {…}]`, `tool bash: …`). For a short session, the reference writes:
 
 ```
 user: My name is Ada and my project codename is BLUEBIRD. Reply with just OK.
@@ -51,9 +57,9 @@ assistant: There are 12 files in src.
 
 The model receives this as a single user message that starts with `[Earlier conversation, compacted — older details may be missing]`, so it can tell a record of the past from a new request.
 
-**Tool results shrink first.** Each tool result is shortened to a taste first (it can be read again from disk). A result longer than 160 characters keeps its first 160 and its size: a 5000-byte log becomes `tool bash: xxxx… [5000 bytes; re-read if needed]`. The user's words and the assistant's decisions can't be read again from anywhere, so they get the space.
+Two steps keep that transcript small. First, tool results shrink. Each tool result is shortened to a taste first (it can be read again from disk). A result longer than 160 characters keeps its first 160 and its size: a 5000-byte log becomes `tool bash: xxxx… [5000 bytes; re-read if needed]`. The user's words and the assistant's decisions can't be read again from anywhere, so they get the space.
 
-**Then the whole text is cut at both ends.** The transcript is cut **head and tail** (Day 11), so the task at the start and the newest summarized context at the end both survive — not only the oldest lines. With a 300-byte cap, a long transcript keeps both of its ends:
+Then the whole text is cut at both ends. The transcript is cut **head and tail** (Day 11), so the task at the start and the newest summarized context at the end both survive, not only the oldest lines. With a 300-byte cap, a long transcript keeps both of its ends:
 
 ```
 user: OLDEST: the task is to refactor billing
@@ -65,11 +71,13 @@ user: filler 29 yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
 user: NEWEST: the codename is BLUEBIRD
 ```
 
-**Size the cap relative to the window.** A fixed 32 KiB cap sounds modest, but it's about 8k tokens: the *entire* 8k window. Use about 20% of the window: `limit × 4 bytes × 0.2`. That's 6553 bytes for an 8192-token window, and 3276 bytes for 4096.
+Size the cap relative to the window. A fixed 32 KiB cap sounds modest, but it's about 8k tokens: the *entire* 8k window. Use about 20% of the window: `limit × 4 bytes × 0.2`. That's 6553 bytes for an 8192-token window, and 3276 bytes for 4096.
+
+That's what goes into the record. The harder question is where the folded part ends and the kept part begins.
 
 ### 2. Where to cut: the invariants
 
-**A tool pair travels together.** A tool pair is an assistant message with tool calls, plus one `tool_result` for each call. Every provider expects each result to follow the call it answers. Put the cut between them, and the kept part starts with an answer to a question the model never asked:
+A tool pair travels together. A tool pair is an assistant message with tool calls, plus one `tool_result` for each call. Every provider expects each result to follow the call it answers. Put the cut between them, and the kept part starts with an answer to a question the model never asked:
 
 ```
 ✗ user: [Earlier conversation, compacted …]     ← the call to c2 was folded in here
@@ -94,10 +102,12 @@ after:   C[u1…r2] → a4 → u3 → a5         (a4.parentId rewritten to C.id)
 
 Moving forward folds the whole pair into the summary, so the kept part is never larger than you asked for. That matters, because you're compacting to save space.
 
-**Each rule has a case where it decides the outcome:**
+Each rule has a case where it decides the outcome:
 - **Rule 1:** with `keepMessages: 1`, a path ending in `LATEST`, a call, its result and an answer keeps all four, starting at `LATEST`. The request you're answering is never folded into the summary.
 - **Rule 2:** a pair right before the latest user message is folded whole, and the user message starts the kept part.
 - **Rule 3:** a path no longer than `keepMessages` gives `null`. So does a path that ends in a tool pair with no user message (keeping nothing is not an option), and a compaction right after another one.
+
+Once the plan says what to fold and what to keep, the session file has to change to match.
 
 ### 3. Rewiring one pointer
 
@@ -119,13 +129,15 @@ Now the two views of the session differ:
 - `getPath()` walks back from the leaf: `e6 → e5 → C`, then stops, because `C` has no parent. So the path is `C → e5 → e6`, and the model sees the compaction message, `q3` and `a3`.
 - `getEntries()` still returns all seven entries. Nothing was deleted, and `q1`…`a2` can still be read.
 
-**Why one pointer.** Copying the kept entries under new ids would also work, but every kept entry would then exist twice, and anything that remembered an old id would point at the wrong copy. Changing one `parentId` keeps every id stable.
+Why change one pointer rather than copy the kept part? Copying the kept entries under new ids would also work, but every kept entry would then exist twice, and anything that remembered an old id would point at the wrong copy. Changing one `parentId` keeps every id stable.
 
-**Why `C` goes before the kept entries.** Also put `C` *before* `kept[0]` in file order, so "the leaf is the last entry" (Day 17) stays true. Appended at the end of the file instead, `C` would be the last entry. After a reopen, the next message would hang off `C`, and `q3` and `a3` would fall off the active path.
+And why does `C` go before the kept entries? Put `C` *before* `kept[0]` in file order, so "the leaf is the last entry" (Day 17) stays true. Appended at the end of the file instead, `C` would be the last entry. After a reopen, the next message would hang off `C`, and `q3` and `a3` would fall off the active path.
+
+Compaction leaves an abandoned branch in the file. Branches can also be made on purpose.
 
 ### 4. Trees: `branch()` and `getChildren()`
 
-**A branch goes back to an earlier point and continues differently, keeping both.** `branch(entryId)` moves the leaf to an existing entry; the next append becomes its child, which forks the tree. It's persisted as a tiny `{ type: 'leaf', leafId }` marker line, so the file stays append-only. `getChildren(id)` lists the forks.
+A branch goes back to an earlier point and continues differently, keeping both. `branch(entryId)` moves the leaf to an existing entry; the next append becomes its child, which forks the tree. It's persisted as a tiny `{ type: 'leaf', leafId }` marker line, so the file stays append-only. `getChildren(id)` lists the forks.
 
 From the course test: after `q1 a1 q2 a2`, branch at `a1` and continue with three new messages. The file and the tree look like this:
 
@@ -140,13 +152,17 @@ tree:  q1 → a1 ─┬→ q2 → a2                       abandoned
 
 (There's no `/branch` command in the core course; a `/fork` command is a nice Stretch.)
 
+That's how compaction changes the file. The last question is when it runs.
+
 ### 5. When to compact
 
-**Before every model call.** Before **every** model call, the loop calls Day 24's `beforeModelCall({ history, newMessages, systemPrompt, tools })` hook. The app estimates the prompt (Day 24's calibrated count, against the effective window). Past 80%, it compacts the **session** and hands back the new, shorter history. The automatic case prints its reason, as in `Compacted 3 messages (context was over 80%)`.
+Compaction is checked before **every** model call. The loop calls Day 24's `beforeModelCall({ history, newMessages, systemPrompt, tools })` hook. The app estimates the prompt (Day 24's calibrated count, against the effective window). Past 80%, it compacts the **session** and hands back the new, shorter history. The automatic case prints its reason, as in `Compacted 3 messages (context was over 80%)`.
 
 `history` is what came before this run, and `newMessages` is the run so far. The session holds only finished runs (they're saved when a run ends, Day 17), so compaction can only fold earlier runs.
 
-**The latest user message and any in-progress tool pair are never touched.** But when a *single run* is itself too big — one request, many large tool reads — its **older** tool results are shortened in place: every call/result pair stays (the protocol holds), and bulky old output becomes a short note the model can re-read from disk. Only when even that can't help does it warn and carry on. "Never drop; old tool output may be shortened."
+The loop `await`s the hook, so for that one call the request waits until compaction has finished, file rewrite included. That's the point: the request has to go out with the shorter history, not the old one. Nothing else waits. The `await` pauses only the run (Day 3), so the keyboard stays live, and a Ctrl+C pressed during a compaction is still heard: the compaction finishes its write, and the model call after it stops through the usual abort path (Day 13).
+
+The latest user message and any in-progress tool pair are never touched. But when a *single run* is itself too big (one request, many large tool reads), its **older** tool results are shortened in place: every call/result pair stays (the protocol holds), and bulky old output becomes a short note the model can re-read from disk. Only when even that can't help does it warn and carry on. "Never drop; old tool output may be shortened."
 
 With three 1000-byte results in one run, `shortenOldToolResults` clears the first two and keeps the last one whole, because the model just asked for it:
 
@@ -158,9 +174,22 @@ tool_result c3: CCCCCCCCCC… (all 1000 bytes)
 
 It returns how many it shortened (2), and a second call returns 0, because a cleared result is already short. The app prints `Shortened 1 earlier tool result to fit the window — read the file(s) again if needed` each time it does this. The run's messages are what gets saved, so the session file keeps the short notes too.
 
-**One subtle trap:** after compaction, the `usage` numbers on kept messages measured the *old, longer* prompt. Trusting them would trigger compaction again on every call. `getMessages()` drops usage that was measured before the latest compaction.
+There's one subtle trap. After compaction, the `usage` numbers on kept messages measured the *old, longer* prompt. Trusting them would trigger compaction again on every call. `getMessages()` drops usage that was measured before the latest compaction.
 
 The course test shows it in numbers. Before compaction, the last reply's usage says 7500 prompt tokens plus 10 for the reply, and Day 24's calibration reports `measured: 7510`. That reply survives the compaction, but its 7500 described a prompt that no longer exists. Read as-is, 7510 is over 80% of an 8192 window (6553), so the next call would compact again, and so would every call after it. With the stale usage dropped, calibration falls back to an estimate of the new, short history: `measured: 0`, `tokens: 40`. The entry in the file keeps its usage. Only the copy that `getMessages()` returns leaves it out.
+
+To know which usage is stale, `getMessages()` compares each entry's `timestamp` with the newest compaction's, and it can compare them as plain strings. JavaScript compares strings character by character, by character code, so text order is time order only for a format that puts the largest unit first and pads every field to a fixed width. ISO 8601 does both. A US-style date does neither:
+
+```js run
+'2026-10-04T09:59:59.999Z' < '2026-10-04T10:00:00.000Z'   // → true
+
+const isoDates = ['2026-10-01', '2026-09-30', '2027-01-15'];
+const usDates = ['10/1/2026', '9/30/2026', '1/15/2027'];
+isoDates.sort()      // → ['2026-09-30', '2026-10-01', '2027-01-15']
+usDates.sort()       // → ['1/15/2027', '10/1/2026', '9/30/2026']
+```
+
+The ISO dates sort into time order, and the US-style dates don't, because as text `'1…'` comes before `'9…'` whatever follows. The timestamps the session writes come from `new Date().toISOString()`, so a string comparison is safe there. Python and C++ compare strings the same way, with the same trap.
 
 ## Build
 
@@ -245,6 +274,12 @@ Replace the truncated transcript with a model-written summary: a second `chat()`
 
 ## Check
 
+That's Checkpoint 3: a harness whose conversations can run as long as you like. Past 80% of the real window, the oldest part of the active path is folded into one compaction record, a transcript with tool output shortened first and the whole cut at both ends. The cut never splits a tool pair and never folds the question being answered. One `parentId` changes, the file is rewritten atomically, and nothing is deleted, so other branches stay byte-for-byte the same. When a single run outgrows the window, its older tool results shrink in place instead. And usage measured before a compaction is ignored, so compaction doesn't trigger itself again on every call.
+
+Next comes [Buffer 2](buffer-2.md), a day to catch up, repair or go further. Then [Day 26](day-26.md) turns the harness into a real command, with layered settings and a scriptable `-p` mode.
+
+Before you move on, check:
+
 - [ ] Checkpoint 3 list fully ticked
 - [ ] Commit `day-25: … checkpoint 3`
 
@@ -279,13 +314,13 @@ The active path isn't longer than `keepMessages` (6 by default), or the only thi
 
 ## Common mistakes
 
-- Compacting `getEntries()`, which folds abandoned branches into the active conversation.
-- Splitting a tool pair "just this once".
-- Giving up when one big run can't be compacted, instead of shortening its older tool results.
-- Keeping only the head of the summary, so the newest facts fall off.
-- Appending `C` at the end of the file, where it becomes the leaf.
-- Copying the kept entries under new ids instead of rewriting one `parentId`.
-- Deleting `usage` from the stored entries instead of from the copies `getMessages()` returns.
+- Compacting `getEntries()`, which folds abandoned branches into the active conversation. Without branches the two lists are the same, so the mistake hides until the first branch exists.
+- Splitting a tool pair "just this once". A count of messages is the simplest cut, and it only lands inside a pair some of the time.
+- Giving up when one big run can't be compacted, instead of shortening its older tool results. Compaction only folds earlier runs, so it looks as if nothing more can be done.
+- Keeping only the head of the summary, so the newest facts fall off. Cutting at the end is the default for most truncation, and the newest folded context is exactly what that cut loses.
+- Appending `C` at the end of the file, where it becomes the leaf. Appending is how every other entry is written, so it's the natural thing to do here too.
+- Copying the kept entries under new ids instead of rewriting one `parentId`. Copying never changes an existing line, which feels safer, but it leaves every kept entry in the file twice.
+- Deleting `usage` from the stored entries instead of from the copies `getMessages()` returns. Deleting is one line, but it destroys a measurement the file should keep.
 
 ## Self-check
 
