@@ -377,11 +377,11 @@ The running flag was set, but nothing cleared it when the run threw. Clear it in
 
 ## Common mistakes
 
-- **Caching the tool list.** Tools added later (extensions, MCP, skills) never reach the model.
-- **Appending the assistant's tool-call message, but calling the provider before all its results are appended.** The provider sees an unanswered call, and hosted APIs reject the request.
-- **An approval stub that *allows* by default.** A test or a script with no approver then runs commands nobody saw. Fail closed.
-- **Deciding who refused by searching the reason's text.** A policy's reason can contain any words, so route on `by`.
-- **Keeping per-run state in module-level variables.** Two overlapping runs then share it, and both report wrong numbers without an error (concept 6).
+- Caching the tool list. Tools added later (extensions, MCP, skills) never reach the model. Building the list once looks like a free optimization, and until Day 22 nothing adds tools while the program runs.
+- Appending the assistant's tool-call message, but calling the provider before all its results are appended. The provider sees an unanswered call, and hosted APIs reject the request. With one tool call per reply the order works out by itself, so the bug waits for a reply with two.
+- An approval stub that *allows* by default. A test or a script with no approver then runs commands nobody saw. Fail closed. An allowing stub makes every test pass without any setup, which is exactly why it's tempting.
+- Deciding who refused by searching the reason's text. A policy's reason can contain any words, so route on `by`. The reason is right there, and a regex on it works for every reason you've written so far.
+- Keeping per-run state in module-level variables. Two overlapping runs then share it, and both report wrong numbers without an error (concept 6). In a test that runs one conversation at a time, a module-level counter behaves exactly like a local one.
 
 ## Self-check
 

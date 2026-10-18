@@ -390,12 +390,12 @@ The first line of the touched region is `text.slice(0, lineStart).split('\n').le
 
 ## Common mistakes
 
-- **`exec` or `shell: true` with string interpolation.** `exec` buffers everything in memory, and an interpolated string turns any data inside it into shell code.
-- **Killing only the wrapper shell.** Its children are adopted by the system and keep running, as the concept 2 experiment shows. Signal the group.
-- **Waiting for `'close'` alone.** A background process holding the pipe makes it wait as long as that process lives.
-- **Trusting the model's `timeout` as given.** A huge value overflows `setTimeout` and kills the command at once, and a missing one means no limit at all. Clamp it.
-- **Letting `edit` replace the first of several matches.** The model didn't say which one it meant, so the edit may change the wrong place without any error.
-- **Putting the important part of a tool result last.** We measured a small model believing its own assumptions over a note at the end of a result. Put what matters first.
+- `exec` or `shell: true` with string interpolation. `exec` buffers everything in memory, and an interpolated string turns any data inside it into shell code. A command string is how you'd type it in a terminal, so building one feels natural.
+- Killing only the wrapper shell. Its children are adopted by the system and keep running, as the concept 2 experiment shows. Signal the group. `child.kill()` is the obvious call, and the shell does die, so the children it leaves behind go unnoticed.
+- Waiting for `'close'` alone. A background process holding the pipe makes it wait as long as that process lives. For an ordinary command `'close'` comes right after the exit, so the difference only shows with `&`.
+- Trusting the model's `timeout` as given. A huge value overflows `setTimeout` and kills the command at once, and a missing one means no limit at all. Clamp it. The model usually sends something sensible, so the bad values only turn up once in a while.
+- Letting `edit` replace the first of several matches. The model didn't say which one it meant, so the edit may change the wrong place without any error. `String.prototype.replace` with a string does exactly this, so it's what the shortest code does.
+- Putting the important part of a tool result last. We measured a small model believing its own assumptions over a note at the end of a result. Put what matters first. Adding a note after the output is the natural order to write it in.
 
 ## Self-check
 

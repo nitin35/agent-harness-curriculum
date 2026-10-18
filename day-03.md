@@ -770,13 +770,13 @@ The rejection didn't happen inside your `try`. Two common causes: a `return some
 
 ## Common mistakes
 
-- **Assuming `fetch` rejects on HTTP 500.** It only rejects when there's no response at all (a network failure or an abort). A 500 is still a response, so check `res.ok`.
-- **Calling an `async` function without `await`.** The next line doesn't wait for it, and if it fails, nothing catches the error, so Node exits with an unhandled rejection.
-- **`return promise` inside a `try`, instead of `return await promise`.** The function hands the promise out before it settles, so its rejection never passes through your `catch`.
-- **Awaiting independent requests in a loop, then blaming the network for the slowness.** Each `await` waits for one request before the next one starts, so the waits add up. Start them all, then `Promise.all`.
-- **Expecting `Promise.all` to stop the other promises when one fails.** A combinator only waits. It has no way to stop work, so abort the rest with a shared signal.
-- **Writing a function that takes a `signal` and never looks at it.** Cancelling is cooperative. If the function doesn't pass the signal on or listen to it, Ctrl+C waits for it to finish.
-- **Treating an abort as an error to report.** It is the user's choice, so stop cleanly and say so.
+- Assuming `fetch` rejects on HTTP 500. It only rejects when there's no response at all (a network failure or an abort). A 500 is still a response, so check `res.ok`. An error status feels like an error, and while the server is working, a 500 never comes up in testing.
+- Calling an `async` function without `await`. The next line doesn't wait for it, and if it fails, nothing catches the error, so Node exits with an unhandled rejection. When the call succeeds, the missing `await` changes nothing you can see, so it survives every test that doesn't make it fail.
+- `return promise` inside a `try`, instead of `return await promise`. The function hands the promise out before it settles, so its rejection never passes through your `catch`. Both lines return the same value, so they look interchangeable until the promise rejects.
+- Awaiting independent requests in a loop, then blaming the network for the slowness. Each `await` waits for one request before the next one starts, so the waits add up. Start them all, then `Promise.all`. A loop with `await` inside reads like the synchronous code you'd write in another language, and with two or three requests the extra wait is hard to notice.
+- Expecting `Promise.all` to stop the other promises when one fails. A combinator only waits. It has no way to stop work, so abort the rest with a shared signal. `Promise.all` rejects at once, which looks as if everything stopped, while the other requests carry on out of sight.
+- Writing a function that takes a `signal` and never looks at it. Cancelling is cooperative. If the function doesn't pass the signal on or listen to it, Ctrl+C waits for it to finish. Taking the parameter feels like supporting cancellation, and a quick function finishes before anyone notices that it ignored the abort.
+- Treating an abort as an error to report. It is the user's choice, so stop cleanly and say so. An abort arrives as a rejection, the same way a failure does, so it's natural to handle both alike.
 
 ## Self-check
 

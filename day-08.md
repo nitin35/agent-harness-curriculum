@@ -420,11 +420,11 @@ A private field has to be declared in the class body before any method uses it: 
 
 ## Common mistakes
 
-- **Wrapping `AbortError` in a `ProviderError`.** Every Ctrl+C then reports "the provider failed", and code above can no longer tell a user's choice from a real failure.
-- **Hard-coding `llama.context_length`.** The prefix depends on the model family, and your model's key is `qwen35.context_length`, so match by suffix.
-- **Asserting on the model's prose in smoke tests.** The wording changes from run to run, so the test fails at random. Assert structure: an id, a name, object arguments.
-- **Throwing on broken tool arguments, or parsing them again later "to be safe".** Broken arguments are the model's mistake, and it can fix them if it's told. Parse once, at the boundary, and report a `parseError`.
-- **Budgeting against the model's maximum (262144) when the server runs with your `num_ctx` (8192).** The conversation grows past what the server really holds, and the start of the prompt is silently dropped (Day 7).
+- Wrapping `AbortError` in a `ProviderError`. Every Ctrl+C then reports "the provider failed", and code above can no longer tell a user's choice from a real failure. The abort does arrive as an error from `fetch`, and the provider wraps every other error it sees, so wrapping this one too looks consistent.
+- Hard-coding `llama.context_length`. The prefix depends on the model family, and your model's key is `qwen35.context_length`, so match by suffix. A hard-coded key works for the model you tried when you wrote it, so it survives until the model changes.
+- Asserting on the model's prose in smoke tests. The wording changes from run to run, so the test fails at random. Assert structure: an id, a name, object arguments. The first run's wording looks like the right answer, so it's natural to pin it.
+- Throwing on broken tool arguments, or parsing them again later "to be safe". Broken arguments are the model's mistake, and it can fix them if it's told. Parse once, at the boundary, and report a `parseError`. Throwing feels strict and a second parse feels careful, but the throw ends a run the model could have rescued.
+- Budgeting against the model's maximum (262144) when the server runs with your `num_ctx` (8192). The conversation grows past what the server really holds, and the start of the prompt is silently dropped (Day 7). The maximum is the number `/api/show` reports, so it looks like the model's real window.
 
 ## Self-check
 

@@ -331,10 +331,10 @@ Something still holds the event loop: a timer you didn't clear, or a child you d
 
 ## Common mistakes
 
-- **Passing the signal to `fetch` but not to `spawn`.** The model call stops, but the command keeps running, and the loop waits for it.
-- **Re-throwing `AbortError` out of `run()`.** Every caller then needs a `try/catch` for a user's ordinary choice, and the partial history is lost.
-- **A test that quietly calls the real Ollama.** It passes on your machine and fails anywhere Ollama is off, and it proves the model, not the loop. Run the suite with Ollama stopped.
-- **Abandoning a promise without a handler when an abort makes you stop waiting for it.** When it rejects later, Node exits with an error nobody was waiting for. Attach the handler as soon as the work starts (concept 5).
+- Passing the signal to `fetch` but not to `spawn`. The model call stops, but the command keeps running, and the loop waits for it. Ctrl+C is usually pressed while the model is talking, so the path that ignores the signal is the one you rarely try.
+- Re-throwing `AbortError` out of `run()`. Every caller then needs a `try/catch` for a user's ordinary choice, and the partial history is lost. Rethrowing is the usual rule for errors you don't handle, and an abort arrives looking like one.
+- A test that quietly calls the real Ollama. It passes on your machine and fails anywhere Ollama is off, and it proves the model, not the loop. Run the suite with Ollama stopped. Ollama is always running where you write the tests, so nothing tells you.
+- Abandoning a promise without a handler when an abort makes you stop waiting for it. When it rejects later, Node exits with an error nobody was waiting for. Attach the handler as soon as the work starts (concept 5). Once you've stopped waiting, the promise feels finished, but the work behind it is still running.
 
 ## Self-check
 

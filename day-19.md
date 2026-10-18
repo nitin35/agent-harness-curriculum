@@ -209,7 +209,7 @@ Sessions are per folder, so check that you started the harness in the same folde
 
 ## Common mistakes
 
-- **Resuming empty history:** reprinting the old messages but not passing them to `run()`. The screen is what you check by eye, and it looks perfect.
+- Reprinting the old messages on resume but not passing them to `run()`, so the model resumes with an empty history. The screen is what you check by eye, and it looks perfect.
 - Mapping an empty picker answer to session 1. "Default to the first item" feels friendly, until a stray Enter swaps your conversation.
 - Creating a fresh session id on every `agent_end`, which turns one conversation into a pile of fragments. `agent_end` sounds like "the conversation ended", but it fires after every run.
 - A global "last session": in another project, the model picks up a conversation about files the tools can't reach. With one project on your machine, global and per-folder behave the same, so the difference only shows up on the second project.

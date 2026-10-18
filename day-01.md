@@ -303,9 +303,9 @@ Very small models (1B parameters and below) list `tools` too, but use them badly
 
 ## Common mistakes
 
-- **Pulling a tiny model "for speed", then concluding that "tool calling doesn't work".** The harness is fine. The model can't do the job (concept 3).
-- **Leaving out `num_ctx`, then blaming the model for "forgetting" in long chats.** It didn't forget. Ollama cut the start of the prompt without telling anyone (concept 4).
-- **Typing `y` without reading the command.** Right now that `y` is the only safety check the toy has. Stretch 1.9 shows how a file the agent reads can try to slip a command past you.
+- Pulling a tiny model "for speed", then concluding that "tool calling doesn't work". The harness is fine. The model can't do the job (concept 3). A small model answers fast and fits in memory, so it looks like the sensible first choice, and a failed tool call looks like your code's fault.
+- Leaving out `num_ctx`, then blaming the model for "forgetting" in long chats. It didn't forget. Ollama cut the start of the prompt without telling anyone (concept 4). Short test chats fit in the default window, so the problem only shows up once a conversation gets long.
+- Typing `y` without reading the command. Right now that `y` is the only safety check the toy has. After a dozen harmless commands, approving becomes a reflex, and Stretch 1.9 shows how a file the agent reads can try to slip a command past you.
 
 ## Self-check
 

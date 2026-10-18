@@ -901,11 +901,11 @@ VS Code reads JSDoc out of the box. Make sure the comment starts with `/**` (two
 
 ## Common mistakes
 
-- **Using `==`, or `||` where you meant `??`.** Both convert values behind your back. `numCtx || 8192` replaces a deliberate `0`, because `||` treats every falsy value as missing.
-- **Testing an array with `if (list)` instead of `if (list.length)`.** It's a Python habit: every array is truthy in JavaScript, even an empty one.
-- **Treating spread as a deep copy, then "immutably" changing nested arrays.** Spread copies only the top level. The nested array is still shared with the original, so the change shows up in both.
-- **Passing `obj.method` as a callback and losing `this`.** The function travels without its object, and whoever calls it decides what `this` is. Wrap it in an arrow function, or `.bind` it.
-- **Leaving out an `await`.** You get the promise instead of the result. Nothing throws, and a promise in a condition is always truthy.
+- Using `==`, or `||` where you meant `??`. Both convert values behind your back. `numCtx || 8192` replaces a deliberate `0`, because `||` treats every falsy value as missing. Both look like operators you know from other languages, and they give the right answer for the values most people test with first.
+- Testing an array with `if (list)` instead of `if (list.length)`. It's a Python habit: every array is truthy in JavaScript, even an empty one.
+- Treating spread as a deep copy, then "immutably" changing nested arrays. Spread copies only the top level. The nested array is still shared with the original, so the change shows up in both. The copy looks independent when you log it, and the shared part only shows when something changes it later.
+- Passing `obj.method` as a callback and losing `this`. The function travels without its object, and whoever calls it decides what `this` is. Wrap it in an arrow function, or `.bind` it. In Python a method taken from an object remembers that object, so it's natural to expect the same here.
+- Leaving out an `await`. You get the promise instead of the result. Nothing throws, and a promise in a condition is always truthy. The line looks complete without it and nothing warns you, so the code seems to work until the value matters.
 
 ## Self-check
 

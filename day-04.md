@@ -641,12 +641,12 @@ A `DIM` was written without a matching `RESET`. Write `RESET` after every run, i
 
 ## Common mistakes
 
-- **Calling `JSON.parse` on every chunk ("a chunk is a line").** Chunk boundaries are chosen by the network, not by the sender, so it fails the moment a line spans two chunks.
-- **A new decoder per chunk.** A decoder can complete a split character only if it saw the first half, so a fresh one per chunk corrupts exactly the characters your tests use. `out += chunk` on `Buffer`s is the same mistake in disguise.
-- **Budgeting bytes with `string.length`.** `length` counts UTF-16 units, and one unit can stand for one, two or three bytes, so the budget is wrong for any text that isn't plain ASCII.
-- **Reading tool calls from the final `done` chunk.** Ollama sends each call once, in an earlier chunk, and doesn't repeat it at the end.
-- **Calling `await res.text()` and splitting the result.** It parses correctly, but nothing appears until the whole reply has arrived: that isn't streaming.
-- **Leaving out `if (done) break` in a reader loop.** A finished stream answers every `read()` at once, so the loop never ends and never lets anything else run.
+- Calling `JSON.parse` on every chunk ("a chunk is a line"). Chunk boundaries are chosen by the network, not by the sender, so it fails the moment a line spans two chunks. On a fast local connection each line often arrives in a chunk of its own, so the bug can hide for a long time.
+- A new decoder per chunk. A decoder can complete a split character only if it saw the first half, so a fresh one per chunk corrupts exactly the characters your tests use. `out += chunk` on `Buffer`s is the same mistake in disguise. Plain ASCII decodes correctly chunk by chunk, so English-only tests never catch it.
+- Budgeting bytes with `string.length`. `length` counts UTF-16 units, and one unit can stand for one, two or three bytes, so the budget is wrong for any text that isn't plain ASCII. For ASCII the two numbers are the same, which is why the mistake passes most tests.
+- Reading tool calls from the final `done` chunk. Ollama sends each call once, in an earlier chunk, and doesn't repeat it at the end. The non-streaming reply has everything in one object, so it's natural to expect the last chunk to be that object.
+- Calling `await res.text()` and splitting the result. It parses correctly, but nothing appears until the whole reply has arrived: that isn't streaming. With a short answer the delay is barely visible, so it can pass for streaming.
+- Leaving out `if (done) break` in a reader loop. A finished stream answers every `read()` at once, so the loop never ends and never lets anything else run. A `for await` loop ends by itself, so a hand-written reader loop looks finished without the check.
 
 ## Self-check
 

@@ -446,11 +446,11 @@ Read the assertion. If your server really does behave differently (for example, 
 
 ## Common mistakes
 
-- **Parsing the stream as SSE (looking for `data:`).** Ollama's native endpoint sends NDJSON, plain JSON lines with no prefix. SSE is what its OpenAI-compatible endpoint sends (7.7).
-- **Reading tool calls from the final `done` chunk.** Each call arrives once, in an earlier chunk, and the `done` chunk doesn't repeat it.
-- **Deciding whether the model called a tool from `done_reason`.** Ollama says `stop` either way, so look for `tool_calls`.
-- **Letting wire names (`tool_calls`, `tool_name`, `done_reason`) leak past the provider into the rest of the harness.** Each leak is one more place that breaks when you add a second provider.
-- **Trusting the API docs over your own captures.** Docs describe what a server was meant to do, when they were written. A capture shows what it does today.
+- Parsing the stream as SSE (looking for `data:`). Ollama's native endpoint sends NDJSON, plain JSON lines with no prefix. SSE is what its OpenAI-compatible endpoint sends (7.7). Many streaming examples online are written for OpenAI-style APIs, so SSE is the format people expect.
+- Reading tool calls from the final `done` chunk. Each call arrives once, in an earlier chunk, and the `done` chunk doesn't repeat it. The final chunk sounds like the place where the answer is complete.
+- Deciding whether the model called a tool from `done_reason`. Ollama says `stop` either way, so look for `tool_calls`. OpenAI-style APIs do report a separate reason for tool calls, so it's natural to expect one here.
+- Letting wire names (`tool_calls`, `tool_name`, `done_reason`) leak past the provider into the rest of the harness. Each leak is one more place that breaks when you add a second provider. With only one provider, the wire's names and the harness's never disagree, so nothing shows the leak.
+- Trusting the API docs over your own captures. Docs describe what a server was meant to do, when they were written. A capture shows what it does today. Docs are quicker to read than a capture is to make, so they're where people look first.
 
 ## Self-check
 

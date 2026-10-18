@@ -327,11 +327,11 @@ Expected. Your model, your Ollama version and plain chance all move the numbers.
 
 ## Common mistakes
 
-- **Throwing from the argument-validation path.** Bad arguments are the model's mistake, and a throw turns one bad call into a dead run instead of a result the model can fix.
-- **Silently letting the last registration win on duplicate names.** Two parts of the code then disagree about which tool `read` is, and nothing tells you. A duplicate is a bug, so throw.
-- **Leaking `needsApproval` into the payload.** It's harness policy, and the model has no say in it.
-- **Building `toProviderTools` by copying the whole definition and deleting fields.** The next field anyone adds leaks, because nobody remembers to delete it.
-- **Judging a description from one run.** A model's choices vary from run to run, so one run can show any result. Count over ten.
+- Throwing from the argument-validation path. Bad arguments are the model's mistake, and a throw turns one bad call into a dead run instead of a result the model can fix. Validation code throws by habit, because in most programs a bad argument is the caller's bug.
+- Silently letting the last registration win on duplicate names. Two parts of the code then disagree about which tool `read` is, and nothing tells you. A duplicate is a bug, so throw. `Map.set` overwrites without complaint, so that's what you get unless you check.
+- Leaking `needsApproval` into the payload. It's harness policy, and the model has no say in it. It happens when the definition goes to the wire whole, because the policy field sits right next to the fields the model needs.
+- Building `toProviderTools` by copying the whole definition and deleting fields. The next field anyone adds leaks, because nobody remembers to delete it. Copy-and-delete is shorter than listing the fields you want, and it's correct on the day you write it.
+- Judging a description from one run. A model's choices vary from run to run, so one run can show any result. Count over ten. A live run takes long enough that a second one feels like a waste, and its result looks like an answer.
 
 ## Self-check
 

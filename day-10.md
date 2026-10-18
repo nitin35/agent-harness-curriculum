@@ -314,11 +314,11 @@ Use `new TextDecoder('utf-8', { fatal: true })`. The default (non-fatal) decoder
 
 ## Common mistakes
 
-- **`resolved.startsWith(root)` as the jail.** It compares text, not folders, so a sibling such as `/work/app-evil` passes.
-- **`rel.startsWith('..')`.** It refuses legitimate names like `..data`, because `..` is only a step up when it's a whole segment.
-- **Forgetting symlinks, or treating a dangling one as "not there yet".** The lexical check can't see links, so the red team writes outside the workspace on Day 27.
-- **Asking `fs.existsSync` about a path that might be a link.** It follows the link and reports on the target, while `lstat` reports on the link itself.
-- **Throwing from `execute` on a missing file.** It's a result: the model should hear "File not found" and adapt, not end the run.
+- `resolved.startsWith(root)` as the jail. It compares text, not folders, so a sibling such as `/work/app-evil` passes. It's the obvious one-line check, and the paths you test it with are usually clearly inside or clearly outside.
+- `rel.startsWith('..')`. It refuses legitimate names like `..data`, because `..` is only a step up when it's a whole segment. It reads as "does it go up?", and names that start with two dots are rare enough that tests leave them out.
+- Forgetting symlinks, or treating a dangling one as "not there yet". The lexical check can't see links, so the red team writes outside the workspace on Day 27. Your own project has no hostile links, so the jail passes every test you'd think to write without them.
+- Asking `fs.existsSync` about a path that might be a link. It follows the link and reports on the target, while `lstat` reports on the link itself. "Does it exist?" sounds like a question about the path you passed, not about where it points.
+- Throwing from `execute` on a missing file. It's a result: the model should hear "File not found" and adapt, not end the run. `fs` throws `ENOENT` by itself, so letting it propagate is what happens unless you catch it.
 
 ## Self-check
 

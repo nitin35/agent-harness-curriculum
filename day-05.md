@@ -725,12 +725,12 @@ On Node 22+, `node --test` takes files or glob patterns, not directories. Use `n
 
 ## Common mistakes
 
-- **`catch (e) { return undefined; }`.** It turns bugs into quiet `undefined`s that fail somewhere else, much later, with no stack trace pointing back here.
-- **Deciding what to do by reading `err.message`,** instead of checking `instanceof`, `category` or `code`. Messages are written for people and get reworded. Types and codes are a contract.
-- **`assert.equal` on objects instead of `deepEqual`.** `equal` compares identity, so two objects with the same contents still fail.
-- **`assert.rejects` without `await`.** The test returns before the check runs, so it passes no matter what.
-- **Tests that hit the real network.** They're slow, they fail when the server is down, and they can't make the server misbehave on purpose. Inject a fake instead.
-- **Testing only what comes back, never what was sent.** Some of the worst bugs, like a missing `num_ctx`, are in the request, and the reply still looks fine.
+- `catch (e) { return undefined; }`. It turns bugs into quiet `undefined`s that fail somewhere else, much later, with no stack trace pointing back here. It makes the crash in front of you go away, which feels like fixing it.
+- Deciding what to do by reading `err.message`, instead of checking `instanceof`, `category` or `code`. Messages are written for people and get reworded. Types and codes are a contract. The message is the first thing you see when you print an error, so it's the obvious thing to test.
+- `assert.equal` on objects instead of `deepEqual`. `equal` compares identity, so two objects with the same contents still fail. The name sounds like "are these equal?", and for objects that question is the one `deepEqual` answers.
+- `assert.rejects` without `await`. The test returns before the check runs, so it passes no matter what. A passing test gives you no reason to look closer, so the missing `await` stays.
+- Tests that hit the real network. They're slow, they fail when the server is down, and they can't make the server misbehave on purpose. Inject a fake instead. On your own machine the server is usually running, so they pass, and nothing reminds you that they depend on it.
+- Testing only what comes back, never what was sent. Some of the worst bugs, like a missing `num_ctx`, are in the request, and the reply still looks fine. The reply is what you read, so it's what you think of checking.
 
 ## Self-check
 

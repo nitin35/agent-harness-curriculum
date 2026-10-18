@@ -481,11 +481,11 @@ The fence must be ```` ```mermaid ````. GitHub renders it. Many editors' Markdow
 
 ## Common mistakes
 
-- **Copying Pi's vocabulary into your design "because it was right there".** The course's tests, other days and the UI all use our event names, so a borrowed name breaks things far from where you wrote it.
-- **Reading function bodies first and drowning in detail.** Without the types, you don't know what any function is for, so every line looks equally important.
-- **Designing the pretty terminal UI (themes, raw mode) instead of the loop, its events and its invariants.** The UI is the easiest part to change later, and the loop is the hardest.
-- **Writing traces for the happy path only.** The abort and error traces are the ones that catch bugs, because those are the paths a loop gets wrong.
-- **Treating `agent_end` like any other transition.** A run that ends by `maxTurns` or an error, mid-tool, then looks illegal, though it's exactly what a correct loop does.
+- Copying Pi's vocabulary into your design "because it was right there". The course's tests, other days and the UI all use our event names, so a borrowed name breaks things far from where you wrote it. After a day of reading Pi, its names are the ones in your head.
+- Reading function bodies first and drowning in detail. Without the types, you don't know what any function is for, so every line looks equally important. The bodies are where the code seems to be, so that's where most people start.
+- Designing the pretty terminal UI (themes, raw mode) instead of the loop, its events and its invariants. The UI can change later at little cost, and the loop can't. The UI is what you see, so working on it feels like progress.
+- Writing traces for the happy path only. The abort and error traces are the ones that catch bugs, because those are the paths a loop gets wrong. The happy path is the run you picture first, so it's the one you write down.
+- Treating `agent_end` like any other transition. A run that ends by `maxTurns` or an error, mid-tool, then looks illegal, though it's exactly what a correct loop does. Every other event has a fixed place in the order, so it's natural to give `agent_end` one too.
 
 ## Self-check
 
