@@ -217,9 +217,9 @@ ProviderError: Cannot reach Ollama
 
 Python contrast: `cause` is `raise … from err`, which sets `__cause__`, and subclassing `Error` is like subclassing `Exception`. C++ contrast: it's like deriving from `std::exception`, with `cause` playing the part of `std::nested_exception`.
 
-### 3. `try / catch / finally`
-
 Throwing is half of error handling. The other half is what happens on the way out: who catches the error, and what gets cleaned up.
+
+### 3. `try / catch / finally`
 
 **The three blocks, in order.** A `try` block runs your code. If something in it throws, the rest of the `try` is skipped and `catch` receives the thrown value. `finally` runs last, *whatever happened*. Here is the same function run once with a failure and once without:
 
@@ -313,6 +313,8 @@ C++ contrast: `finally` does the job RAII did for you, by hand. Python contrast:
 
 **Anything can be thrown.** `throw 'oops'` is legal. The caught value is then a string, with no `name` and no stack. Always throw `Error` objects. And code that inspects a caught value must not assume it's an object. That's why `isAbortError(err)` reads `err?.name`: with `undefined`, plain `err.name` would itself throw a `TypeError`.
 
+Code that throws when something is wrong is also exactly what a test is made of.
+
 ### 4. `node:test` and `node:assert/strict`
 
 **A test is a function that throws when something is wrong.** Node has a test runner built in. `test(name, fn)` registers a test. The test passes if `fn` returns without throwing, and fails if it throws. An **assertion** is a function that throws when its check fails, so a test is mostly a list of assertions. Here's a complete test file for a small function:
@@ -399,6 +401,8 @@ Adding a case is now one line of data, which makes it much more likely that you'
 
 Python contrast: `node:test` plays the role of `unittest` or `pytest`, and `assert.deepEqual` is like `assertEqual` on nested data.
 
+The toy's client is harder to test than a pure function, because it talks to a server.
+
 ### 5. Dependency injection is how you fake things in tests
 
 A test that talks to a real server is slow, fails when the server is down, and can't easily make the server misbehave on purpose. So tests replace the server with a fake. Day 2 showed the way to make that possible: injecting `confirm` and `runTool` into `runTurns`. Today you do the same for the network. The client takes `fetch` as an option, and defaults it to the real one:
@@ -439,9 +443,9 @@ The fake is `async`, so it returns a promise of a `Response`, exactly as the rea
 
 Every test from Day 8 on uses this pattern, and Day 3's course tests already did.
 
-### 6. The command line: `process.argv`, flags and exit codes
-
 The last piece of today is the toy's first real interface to the outside world: its command line.
+
+### 6. The command line: `process.argv`, flags and exit codes
 
 **Your program receives its arguments as an array of strings.** `process.argv` holds the path to `node`, the path to your script, and then every word typed after it. So the arguments themselves are `process.argv.slice(2)`:
 

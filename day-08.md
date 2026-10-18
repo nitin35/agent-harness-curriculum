@@ -125,6 +125,8 @@ What each setting is for:
 
 `#noThink` is a private field (Day 2): a `Set` of model names, which only the class's own methods can see.
 
+That's what goes out. What comes back needs one conversion before anything else sees it: the arguments of each tool call.
+
 ### 3. Arguments become an object at the boundary, and never later
 
 Day 7 showed that one server sends a tool call's arguments as an object and another as a JSON string. If that difference got past the provider, every tool would need to check which one it had received, and one day one of them would forget. So the provider settles it at the edge, once. `parseArguments(raw)` lives in `src/provider/parse-arguments.js`, and it makes them all the same:
@@ -222,9 +224,9 @@ The thinking and glitch rows are the one place the provider matches the server's
 
 Why no automatic retry for a glitch? Sampling is random, so "just ask again" sounds right. We measured it on `qwen2.5:0.5b`: the two glitches it met both came straight back on the retry, which doubled the wait for nothing. Measure before you add a retry (Stretch 8.5).
 
-### 5. `getModelInfo()`: the window you will really get
-
 The last job is to answer a question every later budget depends on: how big is the window, really?
+
+### 5. `getModelInfo()`: the window you will really get
 
 Read the model's maximum from `/api/show`. `POST /api/show` returns `model_info` with a key ending in `.context_length`. Its prefix depends on the model family (`qwen35.`, `llama.`, `gemma3.`), so **match by suffix**:
 

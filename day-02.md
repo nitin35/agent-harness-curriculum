@@ -142,7 +142,7 @@ parseInt('42px', 10)  // → 42       reads digits until it meets something else
 String(42)            // → '42'
 ```
 
-You'll do exactly this on Day 5, when the toy's `--num-ctx` flag arrives as a string: `Number(…)`, then a check that the result is a whole number.
+You'll do exactly this on Day 5, when the toy's `--num-ctx` flag arrives as a string: `Number(…)`, then a check that the result is a whole number. Those are single values. Most of the toy's data is values grouped together, in objects and arrays.
 
 ### 2. Objects, arrays, and two operators you'll use constantly
 
@@ -244,7 +244,7 @@ for (const [key, value] of Object.entries(book)) {
 }
 ```
 
-The `[key, value]` on the left unpacks each entry into two variables. That's *destructuring*, which concept 5 covers properly.
+The `[key, value]` on the left unpacks each entry into two variables. That's *destructuring*, which concept 5 covers properly. Objects and arrays hold the data, and functions do the work on it.
 
 ### 3. Functions, closures and `this`
 
@@ -360,11 +360,11 @@ tally.addAll([1, 2])  // → 3
 
 Write that callback as `function (n) { this.total += n; }` instead, and `forEach` calls it as a plain function: `TypeError: Cannot read properties of undefined (reading 'total')`.
 
-The same rule makes arrow functions the wrong choice *as* methods. An arrow written inside an object literal takes its `this` from the code *around* the object, not from the object itself. Exercise 2.2 lets you watch that happen.
+The same rule makes arrow functions the wrong choice *as* methods. An arrow written inside an object literal takes its `this` from the code *around* the object, not from the object itself. Exercise 2.2 lets you watch that happen. Closures and `this` are also the two ways an object can keep state of its own.
 
 ### 4. Classes versus factories
 
-Concept 3 gave you two ways for an object to keep state, and JavaScript builds a style of programming on each. A **class** keeps its state in fields and reaches it through `this`. A **factory** is a plain function that keeps its state in a closure and returns an object of functions. Here's the same small bank account written both ways:
+JavaScript builds a style of programming on each of them. A **class** keeps its state in fields and reaches it through `this`. A **factory** is a plain function that keeps its state in a closure and returns an object of functions. Here's the same small bank account written both ways:
 
 ```js run
 class Account {
@@ -415,11 +415,11 @@ depositD(10);         // → 25
 
 A `#private` field is enforced by the language. Writing `c.#balance` outside the class is a `SyntaxError` before the file even runs. Python contrast: that's real privacy, not a naming convention like `_balance`. C++ contrast: it's close to `private:`.
 
-Both styles are fine, and the harness uses both. **It uses classes for long-lived, stateful things** (providers, the loop, the session manager). You always call those as `provider.chat(…)`, so their `this` never gets lost. **It uses factories for tools and small helpers**, which get passed around a lot. Today's toy uses factories: `createOllamaClient` is one.
+Both styles are fine, and the harness uses both. **It uses classes for long-lived, stateful things** (providers, the loop, the session manager). You always call those as `provider.chat(…)`, so their `this` never gets lost. **It uses factories for tools and small helpers**, which get passed around a lot. Today's toy uses factories: `createOllamaClient` is one. Whichever style made an object, you still need to get data into it and out of it.
 
 ### 5. Destructuring, spread, and copying instead of changing
 
-This section is about getting data in and out of objects. It ends with a habit that keeps a program like the harness sane: making changed copies instead of changing things in place.
+JavaScript has compact syntax for both directions, and this section ends with a habit that keeps a program like the harness sane: making changed copies instead of changing things in place.
 
 **Destructuring** unpacks the parts of an object or array into variables:
 
@@ -517,9 +517,11 @@ function preview(msg) {
 }
 ```
 
+All of this so far fits in one file, and the toy is about to stop being one.
+
 ### 6. ES modules
 
-Day 1's toy was one file, so every line could see every other line. Today it becomes four files, and the rules for how files share code are the rules of ES modules.
+In one file, every line can see every other line. Across the toy's four new files, what each one can see is set by the rules of ES modules.
 
 **Every file is a module, with its own scope.** A top-level `const` in one file is invisible to every other file, unless the first file exports it and the second imports it. Nothing becomes global by accident, which is a welcome change if you've chased name clashes between C++ headers or Python's `from x import *`.
 
@@ -554,7 +556,7 @@ You'll feel the reason tomorrow. The course tests import `loop.mjs` directly. If
 - writing to a frozen object throws a `TypeError` (sloppy mode silently ignores the write);
 - assigning to a variable you never declared throws a `ReferenceError` (sloppy mode creates a global variable).
 
-The REPL runs in sloppy mode. That's why today's `this` and `Object.freeze` experiments go in files.
+The REPL runs in sloppy mode. That's why today's `this` and `Object.freeze` experiments go in files. Strict mode turns some mistakes into errors while the code runs. Mistakes with types are a different story.
 
 ### 7. JSDoc: types without TypeScript
 
@@ -620,7 +622,7 @@ export function createOllamaClient({ model, url = 'http://localhost:11434', numC
 
 `ToyClient` is "an object with a `model` string, and a `chat` function that takes two arrays and returns a promise of an object". Concept 8 explains what a promise is.
 
-These checks are for *you*, while you write. Types don't exist at run time: Node runs the misspelled call anyway, with `before` set to `undefined`, and every comparison with `undefined` is `false`, so it quietly finds no books. Data you don't control, such as flags or a model's reply, still needs checking when it arrives (Day 5 starts on that). Day 5's stretch also runs the same checker over your whole project from the command line.
+These checks are for *you*, while you write. Types don't exist at run time: Node runs the misspelled call anyway, with `before` set to `undefined`, and every comparison with `undefined` is `false`, so it quietly finds no books. Data you don't control, such as flags or a model's reply, still needs checking when it arrives (Day 5 starts on that). Day 5's stretch also runs the same checker over your whole project from the command line. One type in today's comments is still unexplained: the promise that `chat` returns.
 
 ### 8. Just enough `async` and `await` to read today's code
 

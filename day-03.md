@@ -150,6 +150,8 @@ Most blog posts use CommonJS, so their answers may differ from yours. Second, `s
 
 C++ contrast: there are no threads to start and no locks to take. Two callbacks never run at the same time, so they can't race on a variable halfway through a statement. The concurrency bug in JavaScript is *blocking the loop*. (Races of a different kind still exist, and concept 2 shows where.) Python contrast: this is `asyncio`'s model under different names: an event loop, callbacks, and coroutines that give way at each `await`. Calling `time.sleep(20)` inside a coroutine freezes Python's whole event loop, just as `spawnSync` freezes Node's, while `await asyncio.sleep(20)` hands the loop back. The difference is that Node has no separate, non-async world: every Node program runs on its event loop.
 
+With the queues in place, the next layer is promises, which is how nearly all waiting in JavaScript is written.
+
 ### 2. Promises and async/await
 
 Day 2 gave you the rules for *reading* async code. Now let's look underneath, because every one of those rules follows from one fact you've just learned: a promise's callbacks always run as microtasks.
@@ -356,9 +358,9 @@ To start several promises and wait for them together, hand them all to `Promise.
 
 Day 5 covers errors properly: `try/catch/finally`, error classes and `cause`.
 
-### 3. Cancellation: `AbortController` and `AbortSignal`
-
 You can now start work and wait for it. The last piece is stopping it, and that's what Ctrl+C needs.
+
+### 3. Cancellation: `AbortController` and `AbortSignal`
 
 **A promise can't be cancelled from outside.** A promise is only a placeholder for a result. It has no link back to the work that will produce it, so there's nothing on it you could call "stop" with. Once `fetch` has started, the promise it returned has no stop button. So JavaScript has a separate, standard way to ask work to stop. An **`AbortController`** is the stop button, and its **`signal`** is the wire you hand to the work. Whoever holds the controller can press the button, and everyone holding the signal hears it:
 
@@ -457,6 +459,8 @@ await fetch(url, { signal });          // stops on Ctrl+C, or after 5 s, whichev
 `spawn` reports both kinds as an `AbortError`, so to tell a timeout from a Ctrl+C, `runBash` asks the timeout signal: `timeout.aborted`. Recognize an abort by its error *name* (`err.name === 'AbortError'`), never by its message text.
 
 **An abort is not an error.** Ctrl+C is the user's choice. Code that receives an `AbortError` should stop cleanly and say so, as the toy's `(aborted)` line does. It shouldn't report a failure.
+
+One question is still open from concept 2: how to wait for several things at once, and what happens to the others when one of them fails.
 
 ### 4. Running work together: combinators
 

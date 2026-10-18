@@ -96,7 +96,7 @@ console.log(`the group:  sh alive? ${alive(b.pid)}, sleep alive? ${alive(sleepB)
 // → the group:  sh alive? false, sleep alive? false
 ```
 
-**A process group lets you signal a whole family at once.** Processes started together share a *process group*. If you start a command as the leader of a new group, which is what `detached: true` does, everything it starts joins that group, and a **negative** pid addresses the whole group. That's the second half of the script, and it's the tool's main weapon.
+**A process group lets you signal a whole family at once.** Processes started together share a *process group*. If you start a command as the leader of a new group, which is what `detached: true` does, everything it starts joins that group, and a **negative** pid addresses the whole group. That's the second half of the script, and it's the tool's main weapon. Every command `bash` runs gets that treatment.
 
 ### 3. Nothing a command starts outlives the call
 
@@ -169,6 +169,8 @@ await bash.execute({ command: 'echo oops >&2; exit 3' }, {})
 
 Killed leftovers get a note, and the note goes first: `[NOTE: the background processes this command started (&, nohup) have been KILLED and are no longer running. …]`. We measured why the position matters. With the note at the *end*, `qwen3.5:4b` told the user that the backgrounded `sleep` "will run for 25 seconds", answering from what it knows about `&` instead of from the result. With the note *first*, it got it right in both of our runs. Where you put a message in a tool result changes whether a small model believes it.
 
+That's the whole `bash` contract. The day's second tool is for a smaller job: changing one place in a file.
+
 ### 5. `edit`: one exact, unique snippet
 
 `write` replaces a whole file, which is clumsy for a one-line change: the model has to reproduce every other line perfectly. `edit` replaces one piece of text instead, and only if it's unambiguous. Arguments are `{ path, oldString, newString }`, and `oldString` must occur **exactly once**:
@@ -190,9 +192,11 @@ Reading the diff: `---` is the file before and `+++` after. `@@ -2,1 +2,1 @@` sa
 
 Line endings follow the file. Windows tools often end lines with `\r\n` (CRLF) instead of `\n`. Models write `\n`. In a file that uses `\r\n`, convert `oldString` and `newString` to `\r\n` before matching and replacing. Otherwise the model, which can't reproduce a `\r` it never sees, fails every edit with "not found", and the file would end up with mixed endings. Show the diff with plain `\n`.
 
+You now have tools that read, write, edit and run anything. Before going further, it's worth writing down what could go wrong.
+
 ### 6. Threat model v1
 
-You now have tools that read, write, edit and run anything. Before going further, it's worth writing down what could go wrong. A *threat model* is a written answer to "what could go wrong, and what stops it?". It's how you stay honest about a tool like `bash`, which is a **trust boundary in prose**. A good threat model lists the assets, the attackers, the controls you have, and the gaps you know about:
+A *threat model* is a written answer to "what could go wrong, and what stops it?". It's how you stay honest about a tool like `bash`, which is a **trust boundary in prose**. A good threat model lists the assets, the attackers, the controls you have, and the gaps you know about:
 - **Assets:** what you're protecting (your files, your keys and tokens, your machine).
 - **Attackers and untrusted inputs:** where harmful instructions can come from.
 - **Controls:** the guardrails you built.

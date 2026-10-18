@@ -66,9 +66,11 @@ The abort fired at 100 ms in both cases. The difference is entirely in whether t
 
 C contrast: `pthread_cancel` is asynchronous and unsafe, because it can stop a thread anywhere. Python contrast: `asyncio` raises `CancelledError` into a task at its next `await`, from outside. In JavaScript, the work has to opt in.
 
+Once the signal reaches everything, the next question is what `run()` gives back when it fires.
+
 ### 2. Abort is a result
 
-Once the signal reaches everything, the next question is what `run()` gives back when it fires. The answer is the most important rule of the day: `run()` never throws because the user pressed Ctrl+C. It **returns** `{ aborted: true, turns, toolCalls, usage, newMessages, response }` and never throws `AbortError` to its caller.
+This is the most important rule of the day: `run()` never throws because the user pressed Ctrl+C. It **returns** `{ aborted: true, turns, toolCalls, usage, newMessages, response }` and never throws `AbortError` to its caller.
 
 The loop has to notice the abort in two different situations, and they need two different kinds of check:
 - **While it's waiting on something that listens**, the abort arrives as a rejection. The provider's `fetch` rejects with an `AbortError`, so catch it at the provider call: `if (isAbortError(err) || signal?.aborted) return result({ aborted: true })`. The `|| signal?.aborted` is there because some code fails with an error of a different name when it's interrupted. If the signal has fired, the run was aborted, whatever the error says.
@@ -94,9 +96,11 @@ A run can end in four ways, and the caller can tell them apart:
 
 A **real** provider failure (server down) is different: it propagates as a `ProviderError`. The UI reports it (Day 15), and the loop is reusable afterwards because `#running` is reset in `finally`. Abort is the user's choice, so it's a result. A broken server is a failure someone has to see, so it stays an exception.
 
+Returning cleanly isn't enough, though, if what's left behind is broken.
+
 ### 3. Abort must not corrupt history
 
-Returning cleanly isn't enough if what's left behind is broken. The tool-pair invariant (Day 12) has to survive Ctrl+C. Say the model asked for three tools and you aborted during the first. The first returns `"bash aborted"` (or `[killed: run aborted]`). The other two each get `{ isError: true, content: 'Skipped: run aborted' }`. The assistant message plus three results is still a valid tool pair.
+The tool-pair invariant (Day 12) has to survive Ctrl+C. Say the model asked for three tools and you aborted during the first. The first returns `"bash aborted"` (or `[killed: run aborted]`). The other two each get `{ isError: true, content: 'Skipped: run aborted' }`. The assistant message plus three results is still a valid tool pair.
 
 Measured on the reference loop, with a real `sleep 30` as the first call and an abort after 300 ms (the run returned in 303 ms, and no `sleep` was left):
 
@@ -111,9 +115,11 @@ Measured on the reference loop, with a real `sleep 30` as the first call and an 
 
 The next run starts from a valid history, and the model can see that its calls were interrupted rather than lost.
 
+To test all of this without a real model, you need a fake one, and a good one.
+
 ### 4. `ScriptedProvider`: the seam made honest
 
-To test all of this without a real model, you need a fake one, and a good one. On Day 12, a test faked the provider with `{ chat: async () => replies.shift() }`. That works, but every test rebuilds it, and it can't fake a slow model or a failing one. `ScriptedProvider` is that idea grown into a real class, a fake model that plays a script:
+On Day 12, a test faked the provider with `{ chat: async () => replies.shift() }`. That works, but every test rebuilds it, and it can't fake a slow model or a failing one. `ScriptedProvider` is that idea grown into a real class, a fake model that plays a script:
 
 ```js
 const provider = new ScriptedProvider([
@@ -134,6 +140,8 @@ Each call to `chat` takes the next step from the script:
 When the script runs out, `chat` throws `ScriptedProvider: script exhausted after 2 replies`. A test that scripts too few replies fails loudly instead of quietly getting `undefined`.
 
 It implements the provider interface, so the loop can't tell it from Ollama. Tests stay deterministic and offline, and green tests then prove **the loop**, not the model. Day 26's CLI, Day 29's evals and Day 30's offline demo all run on it too.
+
+One last thing before the build: a few ways of using signals that come up again and again.
 
 ### 5. Signal patterns worth knowing
 

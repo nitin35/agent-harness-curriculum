@@ -126,9 +126,11 @@ That `finally` is your cleanup hook. In concept 4 it closes a network stream whe
 
 Python contrast: this is nearly identical to Python generators, down to `yield`, laziness and `yield from` (JavaScript's `yield*`). JavaScript's `return()` plays the part of Python's `close()`.
 
+Every generator so far has had its next value ready the moment you asked. A stream doesn't.
+
 ### 2. Async generators and `for await`
 
-A plain generator produces each value immediately when asked. A stream can't: the next piece of a model's answer may not have arrived yet. So we need a generator that can also *wait*.
+The next piece of a model's answer may not have arrived yet, so we need a generator that can also *wait*.
 
 **An async generator yields values over time.** An `async function*` combines the two kinds of pause you now know. It can `await` inside its body, which pauses it until a promise settles. And it can `yield`, which pauses it until the consumer asks for more. Because its values may not be ready yet, its `next()` returns a *promise* of `{ value, done }`, not the object itself:
 
@@ -208,9 +210,11 @@ Python contrast: Python's `async def` with `yield`, and `async for`, work the sa
 
 **This is the shape of a streaming reply.** A model's answer arrives as a series of pieces over several seconds, and an async generator turns that into something you consume with one loop. Today's `readNdjson(stream)` is an async generator: it yields each record from Ollama as soon as its line is complete, and the toy reads them with `for await`. Day 16's `chatStream` is one too.
 
+What arrives in those pieces is bytes, though, and bytes are where streaming gets dangerous.
+
 ### 3. Bytes versus strings
 
-Now for the reason chunks are dangerous. It has nothing to do with async code. It's about the difference between the text you see and the bytes that carry it.
+The danger has nothing to do with async code. It's about the difference between the text you see and the bytes that carry it.
 
 **Strings and bytes are different things.** Every character has a number in Unicode, its **code point**, written like `U+00E9` for `é`. A JavaScript string stores text as a sequence of 16-bit *code units* (UTF-16), and `length` counts those units, not characters. Files, pipes and sockets carry *bytes*, and text travels through them encoded as UTF-8, which uses 1 to 4 bytes per code point. In Node, a `Buffer` holds bytes. (`Buffer` is Node's subclass of `Uint8Array`, the standard byte array.)
 
@@ -286,9 +290,11 @@ bytes.subarray(0, cut).toString()              // → 'h'
 
 `bytes[cut] & 0xc0` keeps the top two bits of the byte, and `0x80` is `10` followed by zeros. So the test asks "does this byte start with `10`?". Here `bytes[2]` is `a9`, which does, so the cut moves left to 1, where `c3` starts a character. This loop is the heart of 4.3's `truncateText`.
 
+Bytes become characters with a streaming decoder. Characters still have to become *messages*.
+
 ### 4. NDJSON framing
 
-Bytes become characters with a streaming decoder. Characters still have to become *messages*. Any protocol that sends messages over a stream of bytes has to mark where each message ends, which is called **framing**. Some protocols put each message's length in front of it. Ollama uses the simplest scheme there is: a newline after each message.
+Any protocol that sends messages over a stream of bytes has to mark where each message ends, which is called **framing**. Some protocols put each message's length in front of it. Ollama uses the simplest scheme there is: a newline after each message.
 
 **With `stream: true`, Ollama answers with NDJSON**: *newline-delimited JSON*, one complete JSON object per line.
 
@@ -353,6 +359,8 @@ That `if (done) break` matters more than it looks. Once a stream has ended, ever
 
 `readNdjson` wraps this loop in an async generator (concept 2), so the toy can write `for await (const chunk of readNdjson(res.body))`. If the consumer stops early, the generator's `finally` calls `reader.cancel()`. That tells `fetch` nobody will read the rest, so it can close the connection. The `finally` runs on every way out of the generator, including an error or an abort, so the stream is always cleaned up.
 
+Framing handles input that arrives in pieces. The opposite problem is output too big to send at all.
+
 ### 5. The truncation contract
 
 **Tool output has to fit.** A command can print megabytes, and everything a tool returns goes into the conversation, which must fit in the model's context window (Day 1). So the harness caps it. The README's [truncation contract](README.md#tool-output-truncation-contract) caps tool output at **32 KiB of UTF-8**, never splits a character, and ends with a marker that says what was cut and how to see more:
@@ -375,9 +383,9 @@ The first call keeps `héll`: 5 bytes, because `é` takes two. The second call s
 
 **The advice at the end is a parameter.** The real harness has a `read` tool (Day 10), so that's the default. The toy has no `read` tool, so it passes its own advice. Never point the model at a tool it doesn't have: it will try to call it. (Day 11 adds a second mode for command output, which keeps the head *and* the tail.)
 
-### 6. Backpressure (advanced)
-
 One last question about streams: what happens when data arrives faster than you can use it?
+
+### 6. Backpressure (advanced)
 
 **A stream produces only as fast as you read.** A `ReadableStream` sits between a *source*, which produces chunks, and you, the consumer. It keeps a small queue of chunks in between. When the queue is full, it stops asking its source for more, and it starts again when you `read()` and make room. This is **backpressure**: the consumer's pace pushes back on the producer. Over a network, TCP passes the same pressure back to the sender. So if you `await` each `read()`, a fast producer can't run far ahead of you: the stream waits.
 

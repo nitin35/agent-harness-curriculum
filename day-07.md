@@ -54,9 +54,9 @@ JSON.parse(args).command                 // → 'ls'
 
 That `undefined` is Day 2's quiet missing property, and it would travel on into a tool that receives no command at all. So the provider converts at the boundary, once, and everything past it can rely on one shape. Day 8 writes that translator for Ollama. Day 21 writes a second one, and nothing else changes. C++ contrast: it's the adapter pattern, converting a third-party library's structs into your own types at the edge of your code. Python contrast: it's the same reason you'd turn a web API's JSON into your own dataclasses as soon as it arrives.
 
-### 2. What Ollama actually sends
-
 To write the translator, you need to know the dialect exactly, so let's look at a real response rather than a description of one.
+
+### 2. What Ollama actually sends
 
 **Start from a real capture.** This is the course's `chat-tools.json`, trimmed (the thinking text is long):
 
@@ -118,6 +118,8 @@ Compare it with concept 1. `tool_result` became `tool`. The flat `{ id, name, ar
 
 Older servers may leave out the `id`. The provider then **generates** one, because the harness needs ids to pair results with calls.
 
+The capture ends with two token counts, `prompt_eval_count` for the prompt and `eval_count` for the reply, and the first of them is how you'll catch the context window at work.
+
 ### 3. The context window you actually get
 
 Day 1 warned you about the context window. Today you measure it, so here is the idea in full.
@@ -135,9 +137,9 @@ It's the second number that decides what happens, and it's the one nobody looks 
 
 That's why every request sends `num_ctx` (Day 1's toy already did), why Day 8's provider budgets with the window you will *actually* get, `min(num_ctx, the model's maximum)`, and why Day 24 warns when `prompt_eval_count` looks too small.
 
-### 4. JSDoc typedefs as the schema language
-
 The last piece of today is writing the vocabulary down, so that every module agrees on it and your editor can check it.
+
+### 4. JSDoc typedefs as the schema language
 
 **A schema written as types.** `src/shared/message-schemas.js` contains no code at all, only JSDoc `@typedef`s: the shapes that every other module agrees on. Python contrast: a typedef with `@property` lines is much like a `TypedDict`. C++ contrast: it's a plain struct declaration, checked by your editor rather than a compiler. Day 2 introduced `@typedef` and `@property`. A schema file needs three more pieces of the type language, shown here on a pizza order:
 

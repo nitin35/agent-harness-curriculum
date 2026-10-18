@@ -104,6 +104,8 @@ A call and its results are one unit. An assistant message with `toolCalls` is fo
 
 Hosted APIs reject the second history outright, and a local model is left guessing what happened to `call_2`. You met this on Day 3 with the toy, and Day 25's compaction has to keep pairs whole too.
 
+The next rule hides in where one line of the pseudocode sits.
+
 ### 3. Fresh tools every call
 
 The pseudocode calls `registry.toProviderTools()` inside the turn loop, and that placement is deliberate. Call `registry.toProviderTools(enabledTools)` **right before every** provider call, never once in the constructor. On Day 22, extensions add tools while the program runs, and a cached list is stale by construction.
@@ -115,6 +117,8 @@ const tools = this.registry.toProviderTools(this.enabledTools);   // ✓ inside 
 ```
 
 The call costs almost nothing, and "why can't the model see my new tool?" is a miserable bug to track down. Day 23's MCP tools and Day 24's skills also arrive while the program runs.
+
+Fresh tools tell the model what it can ask for. What it actually asks for can still be wrong.
 
 ### 4. `executeTool` never throws
 
@@ -138,6 +142,8 @@ await loop.executeTool({ id: 'c', name: 'boom', arguments: {} })
 
 Listing the available tools in the first message matters: models correct a wrong name quickly once they're told what exists.
 
+Of those steps, approval is the only one that involves a person, so it gets a concept of its own.
+
 ### 5. Approval: minimal today, fail closed always
 
 Some tools must not run until a person says yes. `AgentLoop` takes an optional `approve(call, tool, { signal })`. It resolves to `true`/`false`, or to `{ approved, reason?, by? }`.
@@ -160,9 +166,11 @@ Who refused decides the wording. A human "no" reads `User denied bash`. A refusa
 
 Today's approver is a three-line `readline` prompt in a script. Day 20 replaces it with the real gate, through the same function signature.
 
+The last rule isn't in the pseudocode at all, because it's about how the code is written rather than what it does.
+
 ### 6. Async state belongs in locals
 
-The last rule isn't in the pseudocode at all, because it's about how the code is written rather than what it does. Every `await` is a point where other code can run (Day 3). While one run waits for the model, timers fire, the UI reacts, and in principle a second run could start. So state that belongs to one run must live in that run's local variables, never in module-level variables shared by every run.
+Every `await` is a point where other code can run (Day 3). While one run waits for the model, timers fire, the UI reacts, and in principle a second run could start. So state that belongs to one run must live in that run's local variables, never in module-level variables shared by every run.
 
 Here is what goes wrong otherwise, on a small example. Two calls to the same function each count their own steps, once with a shared counter and once with a local one:
 

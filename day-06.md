@@ -95,6 +95,8 @@ Read it from the outside in. `subscribe` takes one parameter, `listener`, and re
 
 You'll also meet `interface` (another way to name an object type), `?` after a field name (optional), and `<T>` (a type parameter, like a C++ template argument).
 
+With the syntax covered, the next question is which of Pi's files to open at all.
+
 ### 2. Where things live in Pi
 
 A big repository rewards a plan. You won't read all of Pi, and you don't need to. Today you need its shapes, its event order, and a few files that show its decisions. The vendored copy is `reference/pi` (package version 0.80.3). Paths are relative to it:
@@ -110,7 +112,7 @@ A big repository rewards a plan. You won't read all of Pi, and you don't need to
 | CLI arguments (`Args`, `parseArgs`) | `packages/coding-agent/src/cli/args.ts` |
 | Terminal UI library | `packages/tui/src/` (post-course) |
 
-`packages/ai`, `packages/orchestrator` and `packages/pods` exist too. None of them is the loop, so skip them. Read the files in the table, in 6.2's order, and leave everything else for later.
+`packages/ai`, `packages/orchestrator` and `packages/pods` exist too. None of them is the loop, so skip them. Read the files in the table, in 6.2's order, and leave everything else for later. One warning before you open them: the names you'll find there aren't ours.
 
 ### 3. Vocabulary differences (know them before you read)
 
@@ -134,6 +136,8 @@ agent_end                             agent_end
 ```
 
 Translate while you read, but never "fix" our list to match Pi's. Other days, the course tests and the UI all depend on our names. 6.2 has you work out the tool-call rows yourself.
+
+Names are the smallest difference between the two harnesses. The design choices underneath them matter more.
 
 ### 4. What we copy from Pi, and where we differ on purpose
 
@@ -215,9 +219,9 @@ Without `await`, each listener runs only up to its first `await` (Day 3: an `asy
 
 That freedom has two prices. First, an event can't carry an *answer* back, because nobody waits for one. Day 20 builds approval as a request/response on top of the bus for exactly that reason. Second, the promise an `async` listener returns is dropped on the floor, and as Day 3 showed, a dropped promise that rejects crashes Node. So the bus you build on Day 14 attaches a handler to any promise a listener returns, and reports its failure instead of crashing.
 
-### 5. Design vocabulary
+Those choices go into the design you write today. Before you write it, a few words make it easier to say precisely what you mean.
 
-Before you write a design, a few words make it easier to say precisely what you mean.
+### 5. Design vocabulary
 
 **A state machine** lists the *states* a system can be in, the *events* that can happen, and the *transitions*: which event, in which state, leads to which next state. Any event that has no transition from the current state is **illegal**, and the machine rejects it loudly. A door is the classic example:
 
@@ -261,9 +265,11 @@ REPL.AtPrompt?.run_end             // → undefined: no run was going, so "the r
 
 The diagrams on this page are written in **Mermaid**, a text format for diagrams. GitHub renders it in Markdown files, so your `docs/architecture.md` can contain diagrams that are text, diff-able and easy to edit.
 
+Now we can put those words together and describe the real loop you'll build next week.
+
 ### 6. The loop's event protocol
 
-Now we can put those words together and describe the real loop you'll build next week. Day 12's loop emits events in this order (see its pseudocode): `agent_start`, then for each turn `turn_start`, the model's streamed deltas, then for each tool call `tool_call_start` → (approval) → `tool_call_end` → `tool_result`, then `turn_end`; finally `agent_end`. As a state machine:
+Day 12's loop emits events in this order (see its pseudocode): `agent_start`, then for each turn `turn_start`, the model's streamed deltas, then for each tool call `tool_call_start` → (approval) → `tool_call_end` → `tool_result`, then `turn_end`; finally `agent_end`. As a state machine:
 
 ```mermaid
 stateDiagram-v2

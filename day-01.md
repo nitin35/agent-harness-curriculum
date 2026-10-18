@@ -31,7 +31,7 @@ You ask "How many .txt files are in the demo folder?" The harness sends your que
 
 That reply is only a request. The harness checks that the call is allowed (today, by asking you), **runs the tool itself** in your process, and appends the output to the conversation. Then it calls the model again. This time the model can see the file listing, so it answers in plain text, and the harness prints the answer.
 
-The point to hold on to is that the model never runs anything. It only *asks*. Every command that touches your machine is run by code you wrote, so safety is the harness's job, which means it's yours. A good part of this course follows from that one fact.
+The point to hold on to is that the model never runs anything. It only *asks*. Every command that touches your machine is run by code you wrote, so safety is the harness's job, which means it's yours. A good part of this course follows from that one fact. The rest follows from the shape of the harness's work around those requests, which goes round in a loop.
 
 ### 2. The loop
 
@@ -81,6 +81,8 @@ This trap is worth knowing about before you write any code. A model's **context 
 A small window on its own would be fine. The trouble is what happens when a conversation outgrows it. Ollama **silently drops the beginning of your prompt**, which is exactly where your instructions and your tool list live. There's no error. The model just stops following instructions it can no longer see, and it looks as if it "forgot".
 
 So from today, every request you send includes `options: { num_ctx: 8192 }`. On Day 7 you'll make the truncation happen on purpose and watch it.
+
+That's all you need to know about the model for today. The rest is the JavaScript the toy is written in.
 
 ### 5. JavaScript in practice: Node and ES modules
 

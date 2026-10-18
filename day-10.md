@@ -143,6 +143,8 @@ new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from([0x68, 0xff]))
 // TypeError: The encoded data was not valid for encoding utf-8
 ```
 
+That's everything `read` needs. The other direction is `write`.
+
 ### 4. `write`: whole-file writes, behind approval
 
 `write` replaces a whole file. Arguments are `{ path, content }`, with `needsApproval: true`: from Day 12, the user is asked before every write. Writing is the first tool that changes something, which is why it's the first that needs a yes.
@@ -156,9 +158,11 @@ Overwrote out/hello.txt (5 bytes).        the same path again, with 'hello'
 
 "Overwrote" matters more than it looks. A model that thinks it created a new file, when it actually replaced one, has no reason to tell you that something was lost. Changing part of a file is a different job, with its own tool: Day 11's `edit`.
 
+The last question is how a tool knows which folder is its workspace.
+
 ### 5. Tools are factories
 
-The last question is how a tool knows which folder is its workspace. Each tool is built for one workspace. `createReadTool({ root })` returns a `ToolDefinition`, closed over the workspace root (a Day 2 closure). The loop never passes the root; each tool already knows it.
+Each tool is built for one workspace. `createReadTool({ root })` returns a `ToolDefinition`, closed over the workspace root (a Day 2 closure). The loop never passes the root; each tool already knows it.
 
 ```js
 export function createReadTool({ root }) {
