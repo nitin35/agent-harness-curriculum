@@ -35,7 +35,7 @@ Answer keys for the [30-day curriculum](README.md). **Answer each day's question
 1. **Programmer error vs operational error?** Programmer errors (bugs, broken invariants such as a duplicate tool name) should throw loudly. Operational errors (server down, a missing file, bad model output) are expected. They become *results* the caller can act on (`ToolResult { isError: true }`) or categorized errors with a fix (`ProviderError` with "is Ollama running?").
 2. **`fetch` is a global you could patch. Why inject it anyway?** Injection is explicit: the signature says what the module talks to. Nothing shared leaks: a patched global affects every other test in the file until someone restores it. And the same pattern works for imports, which you *can't* reassign (they are live, read-only bindings owned by the exporting module, and `mock.module()` is still experimental). So: `createOllamaClient({ fetch })`, `new OllamaProvider({ fetch })`, and fakes in tests.
 3. **Why must `finally` be taught explicitly to a C++ programmer?** There's no RAII: nothing is cleaned up automatically when a scope exits. Child processes, timers, listeners and stream readers stay alive unless *you* clean them up in `finally` (or on abort).
-4. **What does `-v` mean?** `--version`, never verbose (verbose is `--verbose` or `-V`). It's fixed in the README's CLI contract and pinned by the course test `day05-args-parser.test.js`.
+4. **What does `-v` mean?** `--version`, never verbose (verbose is `--verbose` or `-V`). It's fixed in the CLI contract on the [reference page](reference.md#cli-flags-day-26) and pinned by the course test `day05-args-parser.test.js`.
 
 ## Day 6
 

@@ -1,6 +1,6 @@
 # Day 13 — Abort, `ScriptedProvider` and Checkpoint 1
 
-**Phase:** Week 2 — Provider & tools · **Checkpoint 1**
+**Phase:** Week 2 — Provider & tools · **Checkpoint 1** · **Size:** one sitting
 
 ## By tonight
 
@@ -139,7 +139,7 @@ Each call to `chat` takes the next step from the script:
 
 When the script runs out, `chat` throws `ScriptedProvider: script exhausted after 2 replies`. A test that scripts too few replies fails loudly instead of quietly getting `undefined`.
 
-It implements the provider interface, so the loop can't tell it from Ollama. Tests stay deterministic and offline, and green tests then prove **the loop**, not the model. Day 26's CLI, Day 29's evals and Day 30's offline demo all run on it too.
+It implements the provider interface, so the loop can't tell it from Ollama. Tests stay deterministic and offline, and green tests then prove **the loop**, not the model. If I had to keep one class from this course, I think it would be this one: Day 26's CLI, Day 29's evals and Day 30's offline demo all run on it too.
 
 One last thing before the build: a few ways of using signals that come up again and again.
 
@@ -292,6 +292,8 @@ Give the provider a per-request deadline: `AbortSignal.any([opts.signal, AbortSi
 ## Check
 
 That's Checkpoint 1: a working engine. One signal reaches the model call, every tool and the gaps between them, and an abort comes back as a result, with the tool pairs still whole and no process left behind. A real failure still throws, so someone sees it. `ScriptedProvider` can play any model, slow or broken, so the whole engine is proven with Ollama switched off, and every later day builds its tests on it.
+
+Take a moment to see how far that is. Day 1's agent was one file of about 70 lines. The reference engine at this checkpoint is about 1,100 lines of code (not counting blank lines and comments) in 19 modules, and it passes 127 course tests with Ollama switched off. Yours differs in the details, but it does the same jobs, and you built every piece of it.
 
 Next comes [Buffer 1](buffer-1.md), a day to catch up, repair or go further, and then [Day 14](day-14.md) starts week 3 by connecting the engine to a real interface through events.
 

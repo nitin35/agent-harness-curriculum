@@ -1,22 +1,27 @@
 # Day 9 — Tool Contracts and the Registry
 
-**Phase:** Week 2 — Provider & tools
+**Phase:** Week 2 — Provider & tools · **Size:** one sitting
 
 ## By tonight
 
-```js
-const registry = new ToolRegistry();
-registry.registerTool(lookupTool);
-registry.toProviderTools();
-// → [{ name: 'lookup', description: 'Look up a term in THIS project…', parameters: {…} }]   ← plain JSON, no functions
-await provider.chat(messages, registry.toProviderTools());                                 // the model now "sees" lookup
+```
+$ node scripts/tool-description-experiment.js
+10 trials per cell · tool called / trials
+
+thinking  description  project question  general question
+false     clear        9/10              0/10
+false     vague        1/10              0/10
+true      clear        10/10             0/10
+true      vague        8/10              0/10
 ```
 
-That snippet is the whole path from your code to the model. A tool is registered, the registry turns it into plain JSON, and the provider sends it, so the model now "sees" `lookup`. Behind it are a contract every tool follows (`ToolDefinition`, `ToolResult`), a hand-written argument validator, and a `Map`-backed registry. You also measure how much a tool's **description** changes what the model does, which matters more than almost anything else you'll do today.
+That table is eighty requests to the same model with the same tool, `lookup`, which looks terms up in this project's glossary. Only two things change: the sentence that describes the tool, and whether the model thinks first. With thinking off, a clear description got the tool called nine times in ten for a question about the project, and a vague one, `Looks things up.`, got it called once. With either description, the tool was never called for a general-knowledge question. Those are our numbers on `qwen3.5:4b`, and tonight you measure yours: a tool's **description** changes what the model does more than almost anything else you'll write today.
+
+Behind the experiment is the whole path from your code to the model: a contract every tool follows (`ToolDefinition`, `ToolResult`), a hand-written argument validator, and a `Map`-backed registry that turns each tool into the plain JSON the provider sends.
 
 ## Why it matters
 
-Yesterday the harness learned to talk to a model. The model can now ask for a tool by name, and the next question is what a tool actually *is*.
+Since Day 8 the harness can talk to a model, and the model can ask for a tool by name. The next question is what a tool actually *is*.
 
 Tools are the agent's hands. Before you build real ones (Days 10–11), you fix the rules every tool follows: what it declares, what it returns, what failure looks like, and what happens when the model sends nonsense arguments. That last one is a policy, and you set it **once**, today. If each tool improvised its own answer, the model would meet a different kind of failure from every tool, and some of them would crash the run.
 
@@ -187,7 +192,7 @@ The model chooses tools *only* from their names, descriptions and schemas. It ca
 
 Compare the two descriptions you'll measure in 9.4. The vague one, `Looks things up.`, doesn't say *what* it looks up, so a question about "tool pair" gives the model no reason to think of it. The clear one names the project's glossary, and also says when *not* to use it.
 
-If a human couldn't tell which of two tools to use from their descriptions, the model can't either.
+If a human couldn't tell which of two tools to use from their descriptions, the model can't either. I think this is the cheapest improvement in the whole course: a better sentence costs nothing, and you're about to measure what it buys.
 
 ### 6. Measure, don't anecdote
 
@@ -285,7 +290,7 @@ Register `read` and `bash` together and ask "Show me what's in notes.txt" ten ti
 
 ## Check
 
-Every tool in the harness now follows one contract, and every failure, from a missing entry to arguments that make no sense, comes back to the model as a result it can act on. Arguments are checked against the tool's schema, with errors written for the model to read. The registry stores tools safely by name and sends the model only plain JSON. And you have numbers, not a hunch, for how much a description matters.
+One contract covers every tool from here on, and every failure, from a missing entry to arguments that make no sense, comes back to the model as a result it can act on. Arguments are checked against the tool's schema, with errors written for the model to read. The registry stores tools safely by name and sends the model only plain JSON. And you have numbers, not a hunch, for how much a description matters.
 
 Tomorrow you build the first real tools on this contract. [Day 10](day-10.md)'s `read` and `write` touch your actual files, so they start with a jail that keeps them inside the workspace.
 

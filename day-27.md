@@ -1,6 +1,6 @@
 # Day 27 — Red-Team Day: Attack Your Own Agent
 
-**Phase:** Week 5 — Product & proof
+**Phase:** Week 5 — Product & proof · **Size:** one sitting
 
 ## By tonight
 
@@ -23,19 +23,19 @@ Read it in two parts. The first three lines happen before the model has said a w
 
 ## Why it matters
 
-Yesterday the harness became a real command, and its settings loader learned to refuse a repository's dangerous keys by name. Since Day 10 you've been building defenses one at a time: the jail, the approval gate, permission rules, trust prompts, global-only MCP servers. Each one was tested on its own. Today they're tested together, by someone trying to get past them.
-
 Prompt injection is the defining security problem of agents, and **it is not solved at the model level**. Any text your agent reads (READMEs, issues, web pages, tool output, MCP tool descriptions) can contain instructions, and models follow instructions. Simon Willison's *lethal trifecta* names the danger:
 
 > an agent with **access to private data**, **exposure to untrusted content**, and **a way to communicate externally** can be tricked into stealing that data.
 
-Your harness has all three (files, a cloned repo, `bash` with network). The only robust defenses limit **capabilities**: what can run, where, and with whose approval. Today you check whether yours do.
+Your harness has all three (files, a cloned repo, `bash` with network). The only robust defenses limit **capabilities**: what can run, where, and with whose approval.
+
+Since Day 10 you've been building those defenses one at a time: the jail, the approval gate, permission rules, trust prompts, global-only MCP servers, and, yesterday, a settings loader that refuses a repository's dangerous keys by name. Each one was tested on its own. Today they're tested together, by someone trying to get past them, and you find out whether yours hold.
 
 ## Concepts
 
 ### 1. Assume the model is compromised
 
-A defense that needs the model's help is a hope, not a defense. Don't ask "will the model resist this?" (sometimes it will, sometimes it won't, and that will change with every model release). Ask: **if the model does exactly what the attacker wrote, what stops it?** The course tests encode that: `ScriptedProvider` plays a model that obeys every injection.
+A defense that needs the model's help is a hope, not a defense. Don't ask "will the model resist this?" (sometimes it will, sometimes it won't, and that will change with every model release). Ask: **if the model does exactly what the attacker wrote, what stops it?** I think that's the most important question in this course. The course tests encode it: `ScriptedProvider` plays a model that obeys every injection.
 
 *By tonight* shows a real model obeying a planted instruction. A scripted model does the same thing every time, which turns a lucky observation into a test. The course's attack suite gives the real CLI a script like this one:
 

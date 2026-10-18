@@ -1,10 +1,24 @@
-# Day 2 — JavaScript Core, by Refactoring the Toy
+# Day 2 — JavaScript Core, by Refactoring the Toy ⚠ heavier day
 
-**Phase:** Week 1 — Hello, agent
+**Phase:** Week 1 — Hello, agent · **Size:** two sittings
 
 ## By tonight
 
-The toy agent from Day 1 still works exactly the same, but it is now four small modules with typed (JSDoc) interfaces:
+```
+$ node toy/main.mjs                                   ← one word deleted: the await before confirm
+you> How many .txt files are in the demo folder?
+  run `ls demo/ | grep '\.txt$' | wc -l`? [y/N]
+agent> There are **2** .txt files in the demo folder.      ← you never answered: it ran anyway
+
+$ node toy/main.mjs                                   ← the word put back
+you> How many .txt files are in the demo folder?
+  run `find ./demo -type f -name "*.txt" | wc -l`? [y/N] y
+agent> There are 2 .txt files in the demo folder.
+```
+
+Those are two runs of the same agent, which you'll split tonight into four small modules. In the first run, one word is missing from `toy/loop.mjs`: the `await` in front of `confirm`. The question still appeared, but the loop never waited for your answer, so the command had already run, and the model answered without you. In the second run the word is back, and the agent waits for your `y` exactly as it did yesterday. You'll make that mistake on purpose in step 2.5, because it's the one that would quietly break the refactor, and nothing in JavaScript warns you about it.
+
+Here are the four modules, each with one job and a typed (JSDoc) interface:
 
 ```
 toy/
@@ -15,11 +29,11 @@ toy/
 └── main.mjs        the REPL
 ```
 
-From the outside, nothing has changed: `node toy/main.mjs` behaves exactly like yesterday's agent. Inside, one file has become several small ones, each with one job and a typed interface, and the loop no longer cares who answers its questions. Along the way you'll learn the parts of JavaScript that most often surprise programmers coming from C++ or Python: how values quietly convert themselves, what a closure captures, why `this` sometimes goes missing, and what `await` actually waits for.
+With the `await` in place, `node toy/main.mjs` behaves exactly like yesterday's agent. Inside, one file has become several small ones, and the loop no longer cares who answers its questions. Along the way you'll learn the parts of JavaScript that most often surprise programmers coming from C++ or Python: how values quietly convert themselves, what a closure captures, why `this` sometimes goes missing, and what `await` actually waits for.
 
 ## Why it matters
 
-Yesterday you typed a working agent into a single file, top to bottom. It works, but everything in it is tangled together. The model client, the shell tool, the loop and the keyboard all share one scope, and the loop can only run with a real model on the other end and a real person typing `y`. That's fine for 70 lines. It won't be fine for the harness you're about to grow.
+The agent you typed on Day 1 works, but everything in it is tangled together. The model client, the shell tool, the loop and the keyboard all share one scope, and the loop can only run with a real model on the other end and a real person typing `y`. That's fine for 70 lines. It won't be fine for the harness you're about to grow.
 
 Today you pull the toy apart into four small modules, and you use the refactor as an excuse to learn the JavaScript that the rest of the course leans on. Every later module is written in the style you set up today: named ES exports, factories or small classes, JSDoc types, and data you copy instead of changing. Learning that style on a program you already understand is much easier than learning it on a new one.
 
@@ -27,9 +41,30 @@ One warning. Misunderstanding the ideas below rarely causes an error today. It c
 
 ## Concepts
 
+**Start with a guessing game.** Before you read concept 1, open `notes/day-02.md` and write down what you think each of these twelve expressions gives. Don't look anything up, and don't run them yet.
+
+```js
+typeof null
+typeof []
+0.1 + 0.2 === 0.3
+[] == false
+[] === []
+!!{}
+'5' * '2'
+'5' + 2
+null ?? 'x'
+0 || 'x'
+0 ?? 'x'
+Number.isNaN(NaN)
+```
+
+If you come from Python or C++, expect several guesses to be wrong, because these expressions poke exactly where JavaScript's answers differ from yours. Concepts 1 and 2 explain every one of them, and step 2.1 has you check your guesses in the REPL. An answer you got wrong and then understood sticks far better than one you only read.
+
 **How to read this section.** Keep a Node REPL open (type `node` in a terminal) and try the examples as you read. A comment like `// → 3.5` shows what Node gives back, and a comment like `// TypeError: …` shows an error it throws. The REPL is more forgiving than your `.mjs` files in a few ways (concept 6 explains why), so the examples that depend on the difference say *run this in a file*.
 
 The examples use everyday data, such as books, users and shopping carts, so that the language is the only new thing in front of you. Each idea then ends by pointing out where it shows up in the toy.
+
+**What you can skim.** You already program, so not every idea below is new. If you know Python well, much of concepts 2 and 5 (dictionary-like objects, list methods, unpacking) will feel familiar: read the bold sentence that opens each rule and the example under it, and slow down at `?.` and `??`, which Python doesn't have, and wherever a result surprises you. A C++ reader gets most of concept 4 from its table, and concept 9 is a pattern you may already use under another name. Don't skim concepts 1, 3 and 8. Truthiness, `this` and the missing `await` catch experienced programmers precisely because they look familiar.
 
 ### 1. Values, types and coercion
 
@@ -663,7 +698,7 @@ if (isAllowed()) console.log('allowed?!');         // prints! a promise is an ob
 if (await isAllowed()) console.log('allowed');     // doesn't print: the answer really is false
 ```
 
-That's exactly what can go wrong in today's refactor. Your loop will ask permission by calling `confirm(command)`, which returns a promise because it waits for the keyboard. Write `if (confirm(command))` instead of `if (await confirm(command))`, and every command runs without asking. Nothing crashes, and nothing warns you.
+That's exactly what can go wrong in today's refactor. Your loop will ask permission by calling `confirm(command)`, which returns a promise because it waits for the keyboard. Write `if (confirm(command))` instead of `if (await confirm(command))`, and every command runs without asking. Nothing crashes, and nothing warns you. Step 2.5 has you watch it happen.
 
 **`async` spreads upward.** A function that needs to `await` something must itself be `async`. So it returns a promise, so *its* callers must `await` it in turn. That's why `runTurns` is `async`, and why `main.mjs` writes `await runTurns(…)`.
 
@@ -740,22 +775,7 @@ The work comes in two sittings. The first drills the language on small scratch f
 
 #### 2.1 Predict, then evaluate — Core
 
-These twelve expressions cover most of concepts 1 and 2. The predicting is the point: an answer you got wrong and then understood sticks far better than one you only read. For each expression below, **write your prediction in `notes/day-02.md` first**. Then evaluate it in the REPL, and wherever you were wrong, write one line on why.
-
-```js
-typeof null
-typeof []
-0.1 + 0.2 === 0.3
-[] == false
-[] === []
-!!{}
-'5' * '2'
-'5' + 2
-null ?? 'x'
-0 || 'x'
-0 ?? 'x'
-Number.isNaN(NaN)
-```
+You wrote your twelve guesses at the start of [Concepts](#concepts), before you knew the rules. Now evaluate each expression in the REPL, mark every guess you got wrong, and write one line in `notes/day-02.md` on why, in your own words. A wrong guess you can now explain is worth more than a right one.
 
 Then add a truthiness table to your notes: all eight falsy values, plus the traps `[]`, `{}`, `'0'` and `'false'`, each with what `Boolean(x)` returns.
 
@@ -826,7 +846,21 @@ Two things to keep in mind while you split. First, `confirm` and `runTool` both 
 
 `node toy/main.mjs` must behave exactly like Day 1. **That is your test today.** From tomorrow, the course's tests drive `runTurns` with a fake client, a fake `confirm` and a fake `runTool`, as in concept 9, with no model and no keyboard.
 
-#### 2.5 Contrast table — Core
+#### 2.5 One missing `await`, on purpose — Core
+
+Before you commit the split, break it once, deliberately. Concept 8 described the bug this refactor invites, and it's worth seeing it happen rather than only reading about it.
+
+1. In `toy/loop.mjs`, delete the `await` in front of `confirm(command)`.
+2. Run `node toy/main.mjs` and ask "How many .txt files are in the demo folder?".
+3. Don't answer the question. Watch.
+
+The `run …? [y/N]` question appears, because `confirm` started asking, but a few seconds later the agent's answer arrives anyway, while you haven't typed a thing (*By tonight* shows a real run). The loop was holding a promise instead of your answer, a promise is an object, and every object is truthy, so the condition passed and the command ran. Nothing crashed, and nothing warned you. In an agent that runs shell commands for you, that's the worst kind of bug: everything looks fine until the command you would have refused.
+
+Then the question appears a second time, after the answer. It's the same question, still open, and readline holds one question at a time, so the next line you type goes to it and not to `you>`. The toy is stuck. Press Ctrl+C to quit (it can't handle Ctrl+C until tomorrow, so Node ends it with an error). Put the `await` back, ask the same question again, and check that the agent waits for your `y`.
+
+Write two sentences in `notes/day-02.md`: what you saw, and why `if (somePromise)` is always true.
+
+#### 2.6 Contrast table — Core
 
 Writing the differences down in one place is what makes them stick. In `notes/day-02.md`, fill in the JavaScript column in your own words:
 
@@ -843,24 +877,25 @@ Writing the differences down in one place is what makes them stick. In `notes/da
 
 Commit: `day-02b: toy split into modules`.
 
-#### 2.6 The class version — Stretch
+#### 2.7 The class version — Stretch
 
 Write `class OllamaClient` with `#model` and `chat()`, and make `runTurns` call `client.chat`. Then try `const chat = client.chat; await chat(…)` and explain the error in one sentence. Day 8's provider *is* a class, and you'll always call it as `provider.chat(…)`.
 
-#### 2.7 Immutability check — Stretch
+#### 2.8 Immutability check — Stretch
 
 In a file, `Object.freeze` a message and try to change `msg.content` (an ES module throws a `TypeError`). Then change `msg.tool_calls[0]`, which *succeeds*, because the freeze is shallow. Fix it with `structuredClone` plus a deep freeze.
 
 ## Check
 
-The agent does exactly what it did yesterday, and that was the point. What changed is its shape. The loop now says what it needs and lets its caller supply it, so it can be driven by a test as easily as by a person. You also have the JavaScript to read everything that follows: values and their traps, closures and `this`, copying instead of changing, modules, types in comments, and the first rules of `await`. Tomorrow takes those rules much further. [Day 3](day-03.md) explains how JavaScript waits without blocking, and uses that to make Ctrl+C stop the work without stopping the program.
+From the outside, the agent does exactly what it did yesterday, and that was the point. You've also seen how little it takes to change that: one missing word, a promise where an answer should be, and a command that runs without your `y`. What changed tonight is the agent's shape. The loop now says what it needs and lets its caller supply it, so it can be driven by a test as easily as by a person. You also have the JavaScript to read everything that follows: values and their traps, closures and `this`, copying instead of changing, modules, types in comments, and the first rules of `await`. Tomorrow takes those rules much further. [Day 3](day-03.md) explains how JavaScript waits without blocking, and uses that to make Ctrl+C stop the work without stopping the program.
 
 Before you move on, check:
 
-- [ ] `notes/day-02.md` has your predictions, the truthiness table and the contrast table
+- [ ] `notes/day-02.md` has your predictions, the truthiness table, your note on the missing `await` and the contrast table
 - [ ] `scratch/closures.js` runs: counter, once, memoize, the four `this` cases and the `setTimeout` fix
 - [ ] `node toy/main.mjs` behaves like Day 1, built from four modules with JSDoc
 - [ ] `runTurns` takes `confirm` and `runTool` as arguments
+- [ ] You watched a missing `await` skip your approval (2.5), then put it back
 - [ ] Commits `day-02a` and `day-02b`
 
 Solution: [`solutions/toy/`](solutions/toy/). It shows the end of week 1, so it already includes the next three days' changes (abort, streaming, the CLI flags).
@@ -886,7 +921,7 @@ A function that destructures an options object was called without one: `createOl
 
 <details><summary>Every command runs without asking</summary>
 
-`rl.question` returns a promise. Did you `await` it inside `confirm`, and `await confirm(cmd)` in the loop? A missing `await` gives you a `Promise` object, which is truthy, so every command runs without asking. Concept 8 shows the same bug in five lines. To find it, log what the condition actually sees: `console.log(confirm(cmd))` prints `Promise { <pending> }`, not `true` or `false`.
+`rl.question` returns a promise. Did you `await` it inside `confirm`, and `await confirm(cmd)` in the loop? A missing `await` gives you a `Promise` object, which is truthy, so every command runs without asking. Concept 8 shows the same bug in five lines, and step 2.5 has you cause it on purpose. To find it, log what the condition actually sees: `console.log(confirm(cmd))` prints `Promise { <pending> }`, not `true` or `false`.
 </details>
 
 <details><summary>The answer prints as <code>[object Promise]</code>, or the loop seems to finish before the model replies</summary>

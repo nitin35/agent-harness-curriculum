@@ -1,6 +1,6 @@
 # Day 19 — Resume: It Remembers You
 
-**Phase:** Week 3 — Interactive harness
+**Phase:** Week 3 — Interactive harness · **Size:** one sitting
 
 ## By tonight
 
@@ -166,7 +166,7 @@ The tests wait for each question to appear before answering, just like a person.
 
 That waiting is the 19.2 gap from the test's side. The test watches the output stream for the question text and only then writes its answer, so an app that never asks, or asks with different words, leaves the test waiting for a question that doesn't come.
 
-The continuity check is the important one, and its idea is worth copying into your own tests. The scripted model's reply is a *function* of the messages it receives (Day 13). It answers `blue` only if the old message is really in its history. So the test passes only if resume fed the history, not merely if something was printed.
+The continuity check is the important one, and it's the test I'd copy into any project that claims to remember something. The scripted model's reply is a *function* of the messages it receives (Day 13). It answers `blue` only if the old message is really in its history. So the test passes only if resume fed the history, not merely if something was printed.
 
 ### 19.4 The continuity check, live — Core
 
@@ -178,7 +178,7 @@ Do the *By tonight* transcript for real with Ollama. If the model can't answer "
 
 ## Check
 
-The harness now remembers you across restarts, and the proof is the model's answer, not the screen. Resuming swaps which session is current, and because the bridge reads its history through `getHistory()`, the very next request carries the old conversation. Each session event has one defined effect, and the save happens when `run()` has returned its result, not on `agent_end`, which fires before the result exists. Sessions belong to the folder they started in, and every choice, the startup prompt and the picker alike, treats a missing answer as "change nothing".
+Quit, restart, and the harness still remembers you, and the proof is the model's answer, not the screen. Resuming swaps which session is current, and because the bridge reads its history through `getHistory()`, the very next request carries the old conversation. Each session event has one defined effect, and the save happens when `run()` has returned its result, not on `agent_end`, which fires before the result exists. Sessions belong to the folder they started in, and every choice, the startup prompt and the picker alike, treats a missing answer as "change nothing".
 
 Tomorrow, [Day 20](day-20.md) replaces the yes/no prompt you've been answering since Day 12 with a real approval gate: permission rules and modes that can allow or deny a call before you're asked at all.
 

@@ -1,6 +1,6 @@
 # Day 1 — Setup, and Your First Agent in 70 Lines
 
-**Phase:** Week 1 — Hello, agent
+**Phase:** Week 1 — Hello, agent · **Size:** one sitting
 
 ## By tonight
 
@@ -239,7 +239,7 @@ Make a folder of harmless files to ask about: `mkdir demo && echo hi > demo/a.tx
 
 > **What protects you.** The `demo` folder gives the agent something harmless to look at. It does **not** limit what the agent can do: every command runs in your project folder, with your user's permissions. Only your `y` stands between the model and your files. Read every command before typing `y`; the default answer is No.
 
-Write `notes/day-01.md` with three things you noticed, especially anything that annoyed you. For example: the wait before anything prints, a command you didn't expect, or what happens when you press Ctrl+C. Days 3 and 4 fix exactly those, and it's more satisfying when you've felt the problem first.
+Write `notes/day-01.md` with three things you noticed, especially anything that annoyed you. For example: the wait before anything prints, a command you didn't expect, or what happens when you press Ctrl+C. Days 3 and 4 fix exactly those, and it's more satisfying when you've felt the problem first. Keep the file: on Day 30 you'll read it again.
 
 ### 1.7 First commit — Core
 
@@ -261,7 +261,7 @@ Ask: "Summarise the files in the demo folder." Approve the `cat`, then watch wha
 
 ### 1.10 Sketch the road ahead — Stretch
 
-List what a real harness needs that the toy lacks: for example streaming, abort, file tools, sessions and safety rules. Keep the list, because Day 6 turns it into your architecture.
+List what a real harness needs that the toy lacks: for example streaming, abort, file tools, sessions and safety rules. Keep the list: Day 6's architecture notes have a place for it.
 
 ## Check
 

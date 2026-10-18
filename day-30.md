@@ -1,6 +1,6 @@
 # Day 30 — Ship It: Demo, Docs, Capstone, Graduation
 
-**Phase:** Week 5 — Product & proof
+**Phase:** Week 5 — Product & proof · **Size:** one sitting
 
 ## By tonight
 
@@ -23,7 +23,7 @@ A harness someone else can install, read, extend and trust, plus one feature tha
 
 ## Why it matters
 
-Yesterday you measured the harness with evals and saved every trial. That was the last new subsystem. Today nothing new goes into the engine. The work is making what's there usable by someone who wasn't here for the thirty days: a stranger who clones the repository, runs one command, and decides from what happens whether to keep reading.
+Day 29's evals were the last new subsystem. Today nothing new goes into the engine. The work is making what's there usable by someone who wasn't here for the thirty days: a stranger who clones the repository, runs one command, and decides from what happens whether to keep reading.
 
 Shipping is making every contract visible:
 - a demo that runs anywhere;
@@ -136,6 +136,8 @@ The capstone is the first feature nobody specified for you. Each option takes a 
 | **Your own MCP server** | the other side of the protocol | expose `read`/`grep` over stdio, modern and legacy; connect your harness *and* another one |
 | **A TUI** | raw mode, differential rendering, restoring the terminal on every exit path | study `@earendil-works/pi-tui` |
 
+If you're unsure which to pick, I'd choose the sandbox: it closes the one gap that every security day pointed at.
+
 Write the plan in `notes/capstone.md` first: the goal, how you'll know it works (**an eval or a test**), and what you'll leave out.
 
 "How you'll know" comes first for the same reason as Day 29's checkers: it decides what "done" means before you're tempted to call it done. For the sandbox, a good test already exists in spirit. Day 27's canary, read through `bash` with `cat`, must fail inside your sandbox and succeed outside it. "What you'll leave out" keeps the capstone finishable.
@@ -196,7 +198,9 @@ Build your capstone, with its test or eval first. Then write a short post: what 
 
 ## Check
 
-That's the course. On Day 1 you typed a toy agent of about 70 lines. Now you have a harness you understand from the inside: a provider seam with two dialects behind it, tools behind a jail, an approval gate that fails closed, sessions that survive a crash and resume, streaming, compaction that keeps the protocol whole, extensions and MCP servers behind trust boundaries, a red-team suite, and evals that tell you what a model can really do. Today it became something you can hand over, with a demo that runs offline, documents that are checked against the code, and an honest list of what it doesn't protect against.
+That's the course. Before you read on, open `notes/day-01.md`: the three things you noticed on the first night. If one was the wait before anything printed, Day 4 fixed it. If it was Ctrl+C killing everything, Day 3 did. If it was a command you didn't expect, that command now meets a jail, a permission policy and a question that fails closed. Most of what annoyed you that night has a day of this course that fixed it, and you wrote every fix.
+
+On Day 1 you typed a toy agent of about 70 lines. Now you have a harness you understand from the inside: a provider seam with two dialects behind it, tools behind a jail, an approval gate that fails closed, sessions that survive a crash and resume, streaming, compaction that keeps the protocol whole, extensions and MCP servers behind trust boundaries, a red-team suite, and evals that tell you what a model can really do. Today it became something you can hand over, with a demo that runs offline, documents that are checked against the code, and an honest list of what it doesn't protect against.
 
 The capstone is where you stop following and start choosing. The README's [After the Curriculum](README.md#after-the-curriculum) list has more places to go next.
 

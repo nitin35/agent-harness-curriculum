@@ -1,6 +1,6 @@
 # Day 18 — Slash Commands and `/model`
 
-**Phase:** Week 3 — Interactive harness
+**Phase:** Week 3 — Interactive harness · **Size:** one sitting
 
 ## By tonight
 
@@ -28,7 +28,7 @@ The harness can now talk about *itself*. Lines starting with `/` never reach the
 
 ## Why it matters
 
-Since yesterday, sessions go to disk, so a conversation outlives the program. But the only way to control the harness itself is still to quit and start it again. You can't ask which session you're in, start a fresh one, or try a different model without restarting.
+A conversation outlives the program now, thanks to Day 17's sessions. But the only way to control the harness itself is still to quit and start it again. You can't ask which session you're in, start a fresh one, or try a different model without restarting.
 
 Every real harness has commands for this: `/help`, `/model`, `/clear`, `/resume`, `/compact`. They're also the main way extensions (Day 22) add features, and that's where a careless design shows. If the router is a chain of `if`s, every new command means editing it, and an extension can't add one at all without changing your code. The design is a **dispatch table**: adding a command means one registration, never another `if` branch in the router.
 
@@ -120,7 +120,7 @@ splitArgs('""')                    // → ['']          empty quotes are an empt
 splitArgs('"unclosed quote runs')  // → ['unclosed quote runs']
 ```
 
-"Boring" is the point. A user can predict exactly what a boring parser does, and its few limits fit in one comment.
+"Boring" is the point, and I'd take it over clever every time: a user can predict exactly what a boring parser does, and its few limits fit in one comment.
 
 A **name** is a letter, then letters, digits, `_` or `-`: the same rule as `PromptUI`'s. `register()` checks **aliases** against it too. An alias like `/?` would show up in `/help` and then answer "Not a command" when typed, because the parser's name rule can't read it:
 
@@ -230,7 +230,7 @@ The last check matters more than it looks. A command rule that's slightly too br
 
 ## Check
 
-The harness now has commands of its own, and they never reach the model. A `Map` from name to definition is the whole router, so a command is one registration, and an extension will add one the same way. The parser is boring on purpose, every advertised name can be typed, and every outcome, an unknown command and a crashing handler included, comes back as a line of text. Commands run even mid-run, except the `idle` ones that would move a running conversation into another session. And `/model` checks before it changes anything, so a typo leaves the harness as it was.
+The harness answers commands of its own, and they never reach the model. A `Map` from name to definition is the whole router, so a command is one registration, and an extension will add one the same way. The parser is boring on purpose, every advertised name can be typed, and every outcome, an unknown command and a crashing handler included, comes back as a line of text. Commands run even mid-run, except the `idle` ones that would move a running conversation into another session. And `/model` checks before it changes anything, so a typo leaves the harness as it was.
 
 Tomorrow, [Day 19](day-19.md) adds the command that makes yesterday's files pay off: `/resume`, which picks up an old conversation where you left it.
 

@@ -1,8 +1,19 @@
 # Day 7 — Wire Formats and Message Schemas
 
-**Phase:** Week 2 — Provider & tools
+**Phase:** Week 2 — Provider & tools · **Size:** one sitting
 
 ## By tonight
+
+```
+$ curl -s http://localhost:11434/api/chat -d @scratch/long-default.json
+{…"content":"thequickbrownfoxjumpsoverthelazydog"…"prompt_eval_count":2050…}   ← HTTP 200, secret gone
+$ curl -s http://localhost:11434/api/chat -d @scratch/long-16k.json
+{…"content":"PELICAN-42"…"prompt_eval_count":11847…}
+```
+
+Those are two requests with the same 12k-token prompt and the same secret code word in its system message. The first lets Ollama choose the window. The server answers HTTP 200, reads only 2,050 of the prompt's tokens, and replies with the filler text instead of the secret, because the system message was silently dropped. The second asks for a 16k window with `num_ctx`, reads all 11,847 tokens, and finds `PELICAN-42`. You'll run both in 7.4, and you'll **see the silent context truncation with your own eyes**: a secret lost without an error.
+
+The rest of today is evidence and vocabulary. You capture exactly what Ollama sends, saved byte for byte:
 
 ```
 fixtures/
@@ -12,11 +23,11 @@ fixtures/
 └── stream-tools.ndjson  streamed tool calls (two, in parallel)
 ```
 
-Four files of evidence: exactly what Ollama sent, saved byte for byte. From them you've filled in the internal ↔ Ollama mapping table, and you've **seen the silent context truncation with your own eyes**, a secret lost without an error. You've also written `src/shared/message-schemas.js`, the one vocabulary the rest of the harness speaks.
+From those four files you fill in the internal ↔ Ollama mapping table, and you write `src/shared/message-schemas.js`, the one vocabulary the rest of the harness speaks.
 
 ## Why it matters
 
-Yesterday you designed the harness. Today you lay its first brick, and it's the one everything else stands on: the shape of a message.
+Day 6 put the harness's design on paper. Today you lay its first brick, and it's the one everything else stands on: the shape of a message.
 
 The toy used Ollama's field names everywhere (`tool_calls`, `function.arguments`, `role: 'tool'`). That was fine for 70 lines, but a real harness can't work that way. It has **one internal vocabulary** and one small translator per provider, so swapping or adding a provider (Day 21) touches nothing else. You can only write that translator well if you know what really crosses the wire, and you have to know it *from evidence*. Documentation lags behind servers. While this course was being built, the API reference said tool calls have no `id`, but a live server sends one.
 
@@ -28,7 +39,7 @@ So today is half lab, half writing. You capture exactly what Ollama sends, you w
 
 "The wire" is what actually crosses the network. When the harness talks to Ollama, it sends JSON over HTTP, and the field names in that JSON are Ollama's choice. Other servers make different choices for the same ideas: Day 21's OpenAI-compatible provider meets a second set. That JSON is the *wire format*, the provider's private dialect.
 
-Inside the harness, the vocabulary is fixed ([message shapes](README.md#message-and-tool-shapes)):
+Inside the harness, the vocabulary is fixed ([message shapes](reference.md#message-and-tool-shapes)):
 - roles are `system`, `user`, `assistant` and `tool_result`;
 - a tool call is `{ id, name, arguments }`, with `arguments` **always a plain object**;
 - reasoning lives in `thinking`.
@@ -316,6 +327,8 @@ Send the conversation back with a tool result in it. Save this as `scratch/round
 
 ### 7.4 See the silent truncation — Core
 
+If you do one experiment this week, I'd make it this one: more of this course's rules come from it than from any other.
+
 1. `curl -s http://localhost:11434/api/show -d '{"model":"qwen3.5:4b"}' | grep context_length` shows the model's maximum.
 2. Run a chat **without** `num_ctx`, then `ollama ps`. What does `CONTEXT` say?
 3. Build a prompt of about 12k tokens with a secret in the **system** message. Create `scratch/long-prompt.mjs`:
@@ -384,7 +397,7 @@ Typedefs only, no logic:
 - `AgentMessage`, `ToolSpec` (`name`, `description`, `parameters`: the provider's view of a tool), `ChatResponse`;
 - `StreamEvent` (the five-variant union), `ModelInfo` and the `Provider` interface.
 
-Copy the field names **exactly** from the README's [message shapes](README.md#message-and-tool-shapes). End the file with `export {};` so it is a module. Concept 4's `ToolCall` shows the format. `StreamEvent` is a union of five object types, written as `{A} | {B} | …` inside one `@typedef`. The `Provider` interface is a typedef whose properties are function types.
+Copy the field names **exactly** from the reference page's [message shapes](reference.md#message-and-tool-shapes). End the file with `export {};` so it is a module. Concept 4's `ToolCall` shows the format. `StreamEvent` is a union of five object types, written as `{A} | {B} | …` inside one `@typedef`. The `Provider` interface is a typedef whose properties are function types.
 
 Then copy `course-tests/day-07/` and run `node --test tests/course/day07-*`. It checks that **your** captures have the shapes the provider will rely on. Commit `day-07: wire captures + message schemas`.
 
@@ -399,7 +412,7 @@ Day 21 builds a provider for this dialect.
 
 ## Check
 
-You now know Ollama's dialect from evidence rather than from documentation. You know where the text, the thinking and the tool calls live, that `done_reason` says `stop` even after a tool call, and that a prompt too big for the window is cut without a word. Against that, you've fixed the harness's own vocabulary as types, which every module from here on will import.
+You've seen Ollama's dialect for yourself, byte for byte, instead of reading about it. You know where the text, the thinking and the tool calls live, that `done_reason` says `stop` even after a tool call, and that a prompt too big for the window is cut without a word. Against that, you've fixed the harness's own vocabulary as types, which every module from here on will import.
 
 Tomorrow you write the translator between the two. [Day 8](day-08.md)'s `OllamaProvider` is the only code in the harness that knows Ollama's field names, and it's tested against captures like the ones you made today.
 
@@ -410,7 +423,7 @@ Before you move on, check:
 - [ ] `src/shared/message-schemas.js` has every typedef from the README
 - [ ] Commit `day-07: wire captures + message schemas`
 
-Reference: [`course-assets/captures/ollama-0.32/`](course-assets/captures/ollama-0.32/) · `src/shared/message-schemas.js` in [`solutions/checkpoint-1/`](solutions/checkpoint-1/).
+Solution: `src/shared/message-schemas.js` in [`solutions/checkpoint-1/`](solutions/checkpoint-1/), and the course's own captures in [`course-assets/captures/ollama-0.32/`](course-assets/captures/ollama-0.32/).
 
 ## Stuck?
 

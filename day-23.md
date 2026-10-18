@@ -1,6 +1,6 @@
 # Day 23 — MCP: Tools from Any Server ⚠ heavier day
 
-**Phase:** Week 4 — Power & context
+**Phase:** Week 4 — Power & context · **Size:** two sittings
 
 ## By tonight
 
@@ -22,11 +22,13 @@ Your harness can now use tools from **any** MCP server (thousands exist) through
 
 ## Why it matters
 
-Since yesterday the harness can load extensions: other people's code, running inside your own process, behind a trust prompt. MCP brings in other people's tools a different way. Their code runs in a separate program, and your harness only ever talks to it through a pipe.
+Plugging someone else's tool server into your agent goes wrong in quiet ways. A server prints `starting…` on the pipe that should carry only JSON. A server crashes halfway through a call, and the run waits for a reply that will never come. A server marks a tool that deletes things as read-only, and a harness that believes it skips the approval question. A server inherits your whole environment, API keys included, because nobody gave it a smaller one. None of these needs a malicious server. They need only a client that trusts too much or waits too long, and today you write one that does neither.
+
+Since Day 22 the harness can load extensions: other people's code, running inside your own process, behind a trust prompt. MCP brings in other people's tools a different way. Their code runs in a separate program, and your harness only ever talks to it through a pipe.
 
 The **Model Context Protocol** is how tools are shared between harnesses now. A server written once (for GitHub, a database, a browser, your company's API) works in Claude Code, Codex, Cursor, VS Code, and from tonight, yours. The spec moved to a **stateless** design in revision `2026-07-28`. Building a client teaches you JSON-RPC, child-process protocols, cancellation, and why "a server's description of its own tool" is untrusted input.
 
-(Pi deliberately ships *without* MCP; Mario Zechner's post explains why. You're adding it because it's now the standard. Hold both views on Day 30.)
+(Pi 0.80.3 deliberately ships *without* MCP; Mario Zechner's post explains why. You're adding it because it's now the standard. Hold both views on Day 30.)
 
 ## Concepts
 
@@ -226,7 +228,7 @@ A tool list and a way to call it would be enough to plug MCP straight into the r
 
 ### 5. MCP tools are untrusted guests
 
-A server is someone else's code, describing itself. Its tool names, descriptions and hints are all the server's own claims. So each server tool becomes a harness tool with guards around it.
+A server is someone else's code, describing itself, and if you remember one thing from today, I'd make it that. Its tool names, descriptions and hints are all the server's own claims. So each server tool becomes a harness tool with guards around it.
 
 The first guard is the name. Each tool is registered as `mcp__<server>__<tool>`, so two servers' `search` tools can't collide. The server part is the name *you* gave it in your config, not one the server picked. Characters outside `A-Z a-z 0-9 _ . -` become `_`, and the whole name is cut to 64 characters:
 
@@ -431,7 +433,7 @@ Handle `resultType: "input_required"` with an `elicitation/create` form request:
 
 ## Check
 
-Your harness now has a client for a protocol thousands of servers speak. It starts each server as a child process, frames its stdout as lines, and matches every reply to its request by id, in whatever order the replies come. A short probe tells it each server's era, and it speaks to each one accordingly. Every way a request can end settles its promise exactly once: a reply, a timeout, an abort with a `cancelled` notification, or the server dying, which fails everything still pending at once. And every tool a server offers arrives as an untrusted guest: renamed, labelled, asking for approval, and running with only the environment you chose to give it.
+Thousands of servers speak MCP, and your harness has a client for them that you wrote yourself. It starts each server as a child process, frames its stdout as lines, and matches every reply to its request by id, in whatever order the replies come. A short probe tells it each server's era, and it speaks to each one accordingly. Every way a request can end settles its promise exactly once: a reply, a timeout, an abort with a `cancelled` notification, or the server dying, which fails everything still pending at once. And every tool a server offers arrives as an untrusted guest: renamed, labelled, asking for approval, and running with only the environment you chose to give it.
 
 Tomorrow, [Day 24](day-24.md) turns to what all these tools cost: the context window, which tool schemas, the system prompt and the history all have to share.
 

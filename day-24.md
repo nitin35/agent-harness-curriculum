@@ -1,6 +1,6 @@
-# Day 24 — Context: Budgets, the System Prompt, AGENTS.md and Skills
+# Day 24 — Context: Budgets, the System Prompt, AGENTS.md and Skills ⚠ heavier day
 
-**Phase:** Week 4 — Power & context
+**Phase:** Week 4 — Power & context · **Size:** two sittings
 
 ## By tonight
 
@@ -25,11 +25,11 @@ The harness knows how full its window is, builds a deterministic system prompt t
 
 ## Why it matters
 
-MCP servers joined the harness yesterday, and every tool they bring arrives with a schema the model has to read. Tools, history, instructions and the reply all share one fixed window, and so far nothing in the harness has been keeping count.
+A session that behaved well for an hour starts ignoring its own rules, and nothing on the screen says why. Day 7 showed the cause: a prompt that doesn't fit isn't rejected. The server drops its beginning, where the system prompt and the tool list live, and answers anyway.
+
+Since Day 23, every MCP tool arrives with a schema the model has to read. Tools, history, instructions and the reply all share one fixed window, and so far nothing in the harness has been keeping count.
 
 The context window is the agent's working memory, and everything competes for it: the system prompt, tool schemas (651 tokens before you've said a word!), history, and room for the reply. Good harnesses spend those tokens deliberately. Anthropic calls this *context engineering*. Today you measure the window, fill it in a stable order (so servers can cache it), and add two of the field's most useful conventions.
-
-When nothing keeps count, the failure is quiet. Day 7 showed that a prompt that doesn't fit isn't rejected: the server drops its beginning, where the system prompt and the tool list live, and answers anyway. A session that behaved well for an hour starts ignoring its own rules, and nothing on the screen says why.
 
 ## Concepts
 
@@ -203,7 +203,7 @@ Two of those five parts come from the repository. The first is a file many proje
 
 ### 5. `AGENTS.md`: follow it, but it can't grant permissions
 
-[AGENTS.md](https://agents.md/) is how repositories tell coding agents how to work in them: "tests run with `pnpm test`", "never edit `generated/`", "use conventional commits". **Real harnesses follow it, and so does yours.** Treating it as untrusted data to ignore would make your harness worse at exactly what the file is for. A typical file is a short Markdown list:
+[AGENTS.md](https://agents.md/) is how repositories tell coding agents how to work in them: "tests run with `pnpm test`", "never edit `generated/`", "use conventional commits". **Real harnesses follow it, and so does yours.** Treating it as untrusted data to ignore would make your harness worse at exactly what the file is for. I'd follow it generously and trust it with nothing, and the next paragraph is the difference between the two. A typical file is a short Markdown list:
 
 ```markdown
 # AGENTS.md
@@ -374,7 +374,7 @@ Call the provider twice with an identical long prompt and compare `prompt_eval_d
 
 ## Check
 
-The harness now keeps count of its own window. It estimates each prompt, calibrates the estimate with the server's own count from the last call, and notices when the server read far less than it was sent. The budget holds back a reserve for the reply, uses the smallest window it can trust, and knows when compaction is due. The system prompt is built the same way every time, in authority order, so the server can reuse its work on the shared prefix. It follows the repository's `AGENTS.md` without letting it grant anything, and it carries one line per skill, loading the full text only when a task needs it.
+The harness keeps count of its own window. It estimates each prompt, calibrates the estimate with the server's own count from the last call, and notices when the server read far less than it was sent. The budget holds back a reserve for the reply, uses the smallest window it can trust, and knows when compaction is due. The system prompt is built the same way every time, in authority order, so the server can reuse its work on the shared prefix. It follows the repository's `AGENTS.md` without letting it grant anything, and it carries one line per skill, loading the full text only when a task needs it.
 
 Tomorrow, [Day 25](day-25.md) acts on that 80% line: compaction shrinks a long conversation until it fits again, and the day ends at Checkpoint 3.
 

@@ -1,6 +1,6 @@
 # Day 8 — `OllamaProvider`: Translation, Errors and the Real Context Limit
 
-**Phase:** Week 2 — Provider & tools
+**Phase:** Week 2 — Provider & tools · **Size:** one sitting
 
 ## By tonight
 
@@ -17,7 +17,7 @@ Five live checks against your own Ollama, all green: a plain answer, a real tool
 
 ## Why it matters
 
-Yesterday you captured Ollama's dialect and wrote down the harness's own vocabulary as types. Today you write the one piece of code that speaks both: the provider.
+Day 7 left you with two vocabularies: Ollama's, captured byte for byte, and the harness's own, written down as types. Today you write the one piece of code that speaks both: the provider.
 
 From today, nothing above `src/provider/` ever sees an Ollama field name. The loop, the sessions and the UI all work in the harness's vocabulary, and the provider translates at the boundary. That boundary is what makes Day 21's second provider a one-file job.
 
@@ -360,7 +360,7 @@ console.log('✔ plain chat:', JSON.stringify(plain.content),
   `(${plain.usage?.promptTokens} prompt tokens)`);
 ```
 
-Run `node scripts/smoke-provider.js`. Then stop Ollama and run it again: you should see the *ollama serve* message. That second run is the point of the day. You've seen the failure a user will meet most often, and the provider tells them how to fix it. Commit `day-08: OllamaProvider`.
+Run `node scripts/smoke-provider.js`. Then stop Ollama and run it again: you should see the *ollama serve* message. That second run is the point of the day, and it's the one I'd show anyone who asks why error messages deserve this much care. You've seen the failure a user will meet most often, and the provider tells them how to fix it. Commit `day-08: OllamaProvider`.
 
 ### 8.5 Retry with backoff — Stretch
 

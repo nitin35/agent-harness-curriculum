@@ -1,6 +1,6 @@
 # Day 21 — A Second Provider: the OpenAI-Compatible Dialect
 
-**Phase:** Week 4 — Power & context
+**Phase:** Week 4 — Power & context · **Size:** one sitting
 
 ## By tonight
 
@@ -17,7 +17,7 @@ The **same** harness (loop, tools, sessions, approvals) now talks to any server 
 
 ## Why it matters
 
-Yesterday the harness got an approval gate with rules and modes. Everything you've built since Day 8 has talked to the model through one interface: `chat()`, `chatStream()` and the `ChatResponse` they return. You've been told that this boundary keeps every provider's quirks inside `src/provider/`. Until there's a second provider, that's only a claim.
+Everything you've built since Day 8 has talked to the model through one interface: `chat()`, `chatStream()` and the `ChatResponse` they return. You've been told that this boundary keeps every provider's quirks inside `src/provider/`. Until there's a second provider, that's only a claim.
 
 So today does two things. **First, it proves your seam.** If adding a provider needs changes above `src/provider/`, the boundary leaked, and today you find out. A leak usually looks harmless where it starts: a field name read in the loop, a check on a provider-specific error string in the UI. Each one means the next provider has to touch that code too.
 
@@ -217,7 +217,7 @@ Copy `course-tests/day-21/`. It covers:
 - **the unchanged `AgentLoop` running on this provider**;
 - an honest `getModelInfo`.
 
-The test of the unchanged `AgentLoop` is the seam's proof. It runs the `AgentLoop` you already have on top of the new provider, and if it passes without edits to the loop, the boundary held.
+The test of the unchanged `AgentLoop` is the seam's proof. It runs the `AgentLoop` you already have on top of the new provider, and if it passes without edits to the loop, the boundary held. It's the test I'd most like to see pass today, because it checks a decision you made thirteen days ago.
 
 ### 21.5 Live, and a diff — Core
 
@@ -229,7 +229,7 @@ If you have an API key for an OpenAI-compatible hosted service, point `baseUrl` 
 
 ## Check
 
-The harness now speaks two dialects, and only `src/provider/` knows it. The new provider frames its stream as SSE, assembles tool calls from fragments keyed by `index` with the Day 16 assembler, and hands the loop the same `ChatResponse` as before, so the loop, the tools, the sessions and the approvals ran on it unchanged. You've also seen what this dialect can't do: it can't ask for a context window, so it defaults to a small one and caps every reply with `max_tokens`. And its API key lives in your environment, named but never stored by your settings.
+Two dialects, one harness, and only `src/provider/` knows the difference. The new provider frames its stream as SSE, assembles tool calls from fragments keyed by `index` with the Day 16 assembler, and hands the loop the same `ChatResponse` as before, so the loop, the tools, the sessions and the approvals ran on it unchanged. You've also seen what this dialect can't do: it can't ask for a context window, so it defaults to a small one and caps every reply with `max_tokens`. And its API key lives in your environment, named but never stored by your settings.
 
 Tomorrow, [Day 22](day-22.md) lets the harness grow without its core growing, through extensions, and starts with the question that matters most about them: whose code is allowed to run.
 

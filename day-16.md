@@ -1,6 +1,6 @@
 # Day 16 — Streaming, and Checkpoint 2 ⚠ heavier day
 
-**Phase:** Week 3 — Interactive harness · **Checkpoint 2**
+**Phase:** Week 3 — Interactive harness · **Checkpoint 2** · **Size:** two sittings
 
 ## By tonight
 
@@ -19,7 +19,7 @@ The real harness streams thinking and answers live, tool calls work exactly as b
 
 ## Why it matters
 
-Yesterday the harness became something you can talk to: one owner of the keyboard, a queue for lines typed mid-run, and a Ctrl+C that stops the work before it stops the session. But every answer still arrives in one piece. The provider waits for the whole reply before returning it, so while the model thinks and writes you see nothing at all. For a model that thinks before it answers, that pause can be long, and a blank screen looks exactly like a hung program.
+A blank screen looks exactly like a hung program. For a model that thinks before it answers, the pause before the first word can be long, and right now you sit through all of it: the provider waits for the whole reply before returning it, so while the model thinks and writes you see nothing at all. Since Day 15 the harness is something you can talk to, with one owner of the keyboard, a queue for lines typed mid-run, and a Ctrl+C that stops the work before it stops the session. But every answer still arrives in one piece.
 
 You did streaming on the toy (Day 4). Now it goes into the provider *interface*, without breaking anything built since, and that's harder than it sounds. The tempting way is to write a streaming copy of the loop next to the old one. Then every fix has to be made twice, and sooner or later one copy misses it: a tool-call bug that only happens live, or an abort that works in tests but not in the terminal. So the rule for today is **parity**: a streamed turn must end in the **same** `ChatResponse` as a non-streamed one and go through **the same** tool loop. Two loops would mean two behaviours, and bugs that only show up live.
 
@@ -40,7 +40,7 @@ async *chatStream(messages, tools, { signal } = {}) {
 
 Day 4's rules for async generators all hold here, and the rest of today leans on them. Nothing runs until the caller asks for the next value, so the generator never reads ahead of the loop. Between values, while the caller's `for await` waits for the next piece, both the generator and the caller are paused at an `await`, and the event loop is free: the keyboard is still read, timers still fire, and a Ctrl+C still reaches its handler. And however the generator stops (it returns, it throws, or the caller leaves the loop early), its `finally` blocks run on the way out.
 
-It yields exactly the five [`StreamEvent`](README.md#message-and-tool-shapes) shapes: `thinking_delta`, `text_delta`, `tool_call_start`, `tool_call_delta` and `done`. Day 4's `readNdjson` does the framing.
+It yields exactly the five [`StreamEvent`](reference.md#message-and-tool-shapes) shapes: `thinking_delta`, `text_delta`, `tool_call_start`, `tool_call_delta` and `done`. Day 4's `readNdjson` does the framing.
 
 Here is what a real stream turns into. The course's `stream-tools.ndjson` capture (Day 7), fed through the reference `chatStream` in 7-byte chunks, yields 45 events:
 
@@ -178,7 +178,7 @@ Here is the whole chain when you press Ctrl+C mid-stream, in order:
 
 Step 1 can only happen because of concept 1's paused `await`s. While the loop waits for the next delta, nothing is blocked, so the keyboard is still being read.
 
-That leaves the claim in the concept's title. Run the same script once with `streaming: false` and once with `streaming: true`, and the history (`newMessages`) is identical, byte for byte. The streaming run also emitted its deltas along the way (`thinking_delta "thinki"`, `"ng it "`, `"over"`, then `text_delta "Don"`, `"e: "`, `"hi"`). The deltas changed what you saw, not what was saved.
+That leaves the claim in the concept's title. Run the same script once with `streaming: false` and once with `streaming: true`, and the history (`newMessages`) is identical, byte for byte. The streaming run also emitted its deltas along the way (`thinking_delta "thinki"`, `"ng it "`, `"over"`, then `text_delta "Don"`, `"e: "`, `"hi"`). I'd treat that identical history as the real test of today: the deltas changed what you saw, not what was saved.
 
 What you see is the UI's job, and it has one new decision to make.
 
@@ -268,6 +268,8 @@ Measure *time to first token* and *tokens per second* from the events, and add t
 ## Check
 
 That's Checkpoint 2: an interactive harness that streams. The provider yields the reply as it arrives and ends with the same `ChatResponse` that `chat()` returns, so one loop serves both paths, and the saved history is identical byte for byte. Tool calls are assembled from their fragments and parsed once, at the end. An abort ends the stream quietly and becomes `{ aborted: true }` through Day 13's path, while a disconnect throws an error that someone sees. All of it rests on how an async generator pauses: between values nothing is blocked, so the keyboard stays live while the model writes.
+
+Step back for a second. The reference harness at this checkpoint is about 1,600 lines of code in 27 modules, it passes 169 course tests, and on screen it already behaves like the coding agents it's modelled on: it thinks out loud, asks before it acts, and stops when you tell it to.
 
 So far, though, every conversation lives in memory and disappears when you quit. Tomorrow, [Day 17](day-17.md) puts sessions on disk.
 

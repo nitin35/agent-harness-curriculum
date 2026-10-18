@@ -1,6 +1,6 @@
 # Day 14 — Canonical Events, the Event Bus and the Printer
 
-**Phase:** Week 3 — Interactive harness
+**Phase:** Week 3 — Interactive harness · **Size:** one sitting
 
 ## By tonight
 
@@ -35,7 +35,7 @@ Today fixes both before the listeners arrive. One frozen list of names, one bus 
 
 ### 1. Canonical names, verbatim
 
-Start with the names. "Canonical" means *the* name: the one official name for each thing that happens, which everybody uses. Since Day 12 the loop has emitted names like `turn_start` and `tool_result` as plain strings, and today those names get a home. Copy the [README's event list](README.md#canonical-event-list) into `src/shared/events.js` as frozen constants, plus a payload `@typedef` for each event. There are 16 core events and 3 UI events.
+Start with the names. "Canonical" means *the* name: the one official name for each thing that happens, which everybody uses. Since Day 12 the loop has emitted names like `turn_start` and `tool_result` as plain strings, and today those names get a home. Copy the [reference page's event list](reference.md#canonical-event-list) into `src/shared/events.js` as frozen constants, plus a payload `@typedef` for each event. There are 16 core events and 3 UI events.
 
 You designed the loop's part of this list on Day 6. Not every name fires yet, though. Some start later in the course: `text_delta` and `thinking_delta` (Day 16), `command_run` (Day 18), `session_start`/`session_shutdown` (Day 19), the approval pair (Day 20) and `compaction` (Day 25). Putting them on the list today means every subsystem is written against the whole vocabulary from the start. And the list has **no** `tool_call` and no `done`.
 
@@ -277,7 +277,7 @@ The loop needs no other change, because Day 12 gave it an `emit` option for exac
 1. Wire `OllamaProvider` + registry + loop + bus, subscribe to **every** name in `ALL_EVENTS`, and print `name.padEnd(16) + JSON.stringify(payload)` (truncate long payloads).
 2. Give it an approver that **asks you** `allow bash …? [y/N]` with Day 3's `rl.question`. Don't write a pattern that decides a command is safe: `ls; rm -rf ~` starts with `ls`, and `find . -delete` is a `find`. Pre-approving commands is a policy decision, and it gets its own day (Day 20).
 3. Also collect the event names, and at the end print whether they pass your Day 6 checker, `checkTrace(names)` from `tests/helpers/event-protocol.js`.
-4. Run it once and keep the output in `notes/day-14.md`. It's your map of what the UI will need to show.
+4. Run it once and keep the output in `notes/day-14.md`. I'd keep it open in a second window for the rest of the week: it's the clearest map you'll have of what the UI has to draw.
 
 `padEnd(16)` pads each name with spaces to 16 characters, which lines the payloads up in a column, as in *By tonight*. Step 1 subscribes to every name, including the ones that don't fire yet, so the trace will pick them up on the days they start.
 
@@ -313,7 +313,7 @@ Force `color: 'always'`, print all roles, and look at the escape codes with `| c
 
 ## Check
 
-The harness now has one vocabulary of 19 events, written once and frozen, and a bus that enforces it. A misspelt name fails the first time it runs, a broken listener becomes a line from `onError` instead of a dead run, and `emit` never waits for anyone. You've seen exactly when an async listener's code runs, and why the promise it returns needs a handler straight away. And the real loop, traced live and on five scripted runs, follows the protocol you designed on Day 6.
+Nineteen event names, written once and frozen, are the harness's whole vocabulary from here on, and a bus enforces them. A misspelt name fails the first time it runs, a broken listener becomes a line from `onError` instead of a dead run, and `emit` never waits for anyone. You've seen exactly when an async listener's code runs, and why the promise it returns needs a handler straight away. And the real loop, traced live and on five scripted runs, follows the protocol you designed on Day 6.
 
 Tomorrow, [Day 15](day-15.md) puts a person on the other end: a prompt you type into, with tool calls you approve and Ctrl+C that stops a run without stopping the program, all drawn through this bus and this printer.
 

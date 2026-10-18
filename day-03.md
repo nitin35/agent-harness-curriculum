@@ -1,6 +1,6 @@
-# Day 3 — Async JavaScript: Make Ctrl+C Work
+# Day 3 — Async JavaScript: Make Ctrl+C Work ⚠ heavier day
 
-**Phase:** Week 1 — Hello, agent
+**Phase:** Week 1 — Hello, agent · **Size:** two sittings
 
 ## By tonight
 
@@ -25,11 +25,11 @@ Look at what Ctrl+C does now. It stops the *work*: a long answer, a running comm
 
 ## Why it matters
 
-Yesterday you split the toy into modules and learned the first rules of `await`: a promise stands for a result you don't have yet, and `await` gets the result out of it. You could use those rules without knowing how any of it works underneath.
+The moment you most want to stop an agent is the moment it's doing something you didn't expect: an answer that runs away, or a command that hangs. Right now Ctrl+C can't do that. On Day 1, `spawnSync` froze everything while a command ran, and Ctrl+C ended the whole session instead of just the command. A real harness has to stop the work and keep the conversation.
 
-Today you need to know. On Day 1, `spawnSync` froze everything while a command ran, and Ctrl+C ended the whole session instead of just the command. A real harness has to do better. You must be able to stop a runaway answer or a hung command and carry on with the conversation, because the moment you most want to stop an agent is the moment it's doing something you didn't expect.
+Yesterday you learned the first rules of `await`: a promise stands for a result you don't have yet, and `await` gets the result out of it. You could use those rules without knowing how any of it works underneath. Today you need to know.
 
-Making that work takes three ideas, and each one builds on the one before:
+Stopping the work without stopping the program takes three ideas, and each one builds on the one before:
 - the **event loop**, which explains why nothing else can run while your code is busy, and so why Day 1's Ctrl+C couldn't get through;
 - **promises**, which let a program wait without being busy;
 - **`AbortController`**, the one cancellation mechanism that `fetch`, child processes, readline and your own code all share.
@@ -39,6 +39,8 @@ This is the hardest JavaScript in the course, and also the most important. Most 
 ## Concepts
 
 **How to read this section.** Run the examples in concepts 1 and 2 *in a file* (for example `node scratch/try.mjs`), not in the REPL. The REPL runs each line as you enter it, so callbacks queued by one line run before you type the next, and the order you see isn't the order a program gets. Many examples number their output lines (`1 …`, `2 …`) in the order they print, so you can check your prediction at a glance.
+
+**If you know an event loop already.** Python's `asyncio`, or a GUI toolkit's main loop such as Qt's, works on the same idea, so the first half of concept 1 will feel familiar: skim it, and slow down at *Two kinds of queue*. Microtasks, concept 2's ordering rules and concept 3's cooperative cancellation are where JavaScript differs from what you know, so read those slowly. Two boxes marked *Going deeper* hold details you can skip on a first read.
 
 ### 1. One thread, and the queues around it
 
@@ -137,7 +139,9 @@ That's the practical consequence to remember. When a promise settles, the code w
 
 Step 2 runs microtasks *until none are left*, including new ones queued along the way. So a microtask that keeps queueing another one holds back every timer and every I/O callback, just like the busy loop above. In a test, 100,000 chained `queueMicrotask` calls all ran before a `setTimeout(…, 0)` that was queued first.
 
-**Two Node details that trip up predictions.** First, the order of `process.nextTick` and promise callbacks depends on the module type. In CommonJS, `nextTick` callbacks run before promise callbacks. In an ES module (your `.mjs` files), the top-level code itself runs inside a promise job, so at the top level promise callbacks run first:
+<details><summary>Going deeper: two Node details that trip up predictions</summary>
+
+First, the order of `process.nextTick` and promise callbacks depends on the module type. In CommonJS, `nextTick` callbacks run before promise callbacks. In an ES module (your `.mjs` files), the top-level code itself runs inside a promise job, so at the top level promise callbacks run first:
 
 ```js
 Promise.resolve().then(() => console.log('promise'));
@@ -147,6 +151,8 @@ process.nextTick(() => console.log('nextTick'));
 ```
 
 Most blog posts use CommonJS, so their answers may differ from yours. Second, `setTimeout(fn, 0)` and `setImmediate(fn)` from the main module can run in either order. Never write code that depends on it.
+
+</details>
 
 C++ contrast: there are no threads to start and no locks to take. Two callbacks never run at the same time, so they can't race on a variable halfway through a statement. The concurrency bug in JavaScript is *blocking the loop*. (Races of a different kind still exist, and concept 2 shows where.) Python contrast: this is `asyncio`'s model under different names: an event loop, callbacks, and coroutines that give way at each `await`. Calling `time.sleep(20)` inside a coroutine freezes Python's whole event loop, just as `spawnSync` freezes Node's, while `await asyncio.sleep(20)` hands the loop back. The difference is that Node has no separate, non-async world: every Node program runs on its event loop.
 
@@ -489,6 +495,8 @@ const responses = await Promise.all(urls.map((url) => fetch(url)));   // togethe
 | `Promise.race` | the first settles (either way) | first response wins |
 | `Promise.any` | the first fulfils (else `AggregateError`) | redundant sources |
 
+<details><summary>Going deeper: the combinators side by side</summary>
+
 Here they are with one slow and one fast result:
 
 ```js run
@@ -511,6 +519,8 @@ await Promise.allSettled([delay(10).then(() => 'fast'), Promise.reject(new Error
 //     { status: 'rejected', reason: Error: boom } ]
 ```
 
+</details>
+
 Python contrast: `Promise.all` is `asyncio.gather`, and `Promise.allSettled` is `asyncio.gather(…, return_exceptions=True)`.
 
 **A combinator doesn't cancel anything.** When `Promise.all` rejects because one request failed, the other requests keep running, and their results are thrown away. To stop them, give them a shared signal and abort it. Python contrast: an `asyncio.TaskGroup` cancels its remaining tasks when one fails, but JavaScript has nothing like that built in, and signals fill the gap. Stretch 3.6 puts combinators and signals together.
@@ -523,7 +533,7 @@ The first three steps are experiments in scratch files, so you can watch each id
 
 ### 3.1 Predict the event loop — Core
 
-This is concept 1's trace table, done by you. In `scratch/loop-order.mjs`, write three short snippets that mix `console.log`, `Promise.resolve().then(…)`, `queueMicrotask(…)`, `process.nextTick(…)` and `setTimeout(…, 0)`. **Write your predicted order** in `notes/day-03.md`, then run each one. Label every line *stack*, *microtask* or *macrotask*, as concept 1's example does. One wrong prediction usually means one misunderstood queue (or the ES-module detail in concept 1).
+This is concept 1's trace table, done by you. In `scratch/loop-order.mjs`, write three short snippets that mix `console.log`, `Promise.resolve().then(…)`, `queueMicrotask(…)`, `process.nextTick(…)` and `setTimeout(…, 0)`. **Write your predicted order** in `notes/day-03.md`, then run each one. Label every line *stack*, *microtask* or *macrotask*, as concept 1's example does. One wrong prediction usually means one misunderstood queue (or the ES-module detail in concept 1's *Going deeper* box).
 
 Run one snippet at a time, with the others commented out. Snippets in the same file share the same queues, so their output interleaves.
 
@@ -712,7 +722,7 @@ Time three sequential `await delay(100)` calls against `Promise.all` of three (a
 
 ## Check
 
-You can now stop an agent without losing it. Underneath that is a model of JavaScript you'll use every day from here on. One thread runs your code, and callbacks wait in queues until it's free. A promise's callbacks always run later, as microtasks. `await` cuts a function in two. And cancelling is a request that the work has to listen for. The toy puts all of that into one signal per question, handed to every piece of work, and a loop that answers every tool call even when the run is cut short.
+Stopping an agent no longer means losing it. Underneath that is a model of JavaScript you'll use every day from here on. One thread runs your code, and callbacks wait in queues until it's free. A promise's callbacks always run later, as microtasks. `await` cuts a function in two. And cancelling is a request that the work has to listen for. The toy puts all of that into one signal per question, handed to every piece of work, and a loop that answers every tool call even when the run is cut short.
 
 Tomorrow tackles the other thing you noticed on Day 1: the long wait before anything appears. [Day 4](day-04.md) makes the toy stream its answer as the model writes it, which means handling bytes that arrive in pieces.
 

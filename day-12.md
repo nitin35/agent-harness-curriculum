@@ -1,6 +1,6 @@
-# Day 12 — The Agent Loop (with a Fail-Closed Approval Gate) ⚠
+# Day 12 — The Agent Loop (with a Fail-Closed Approval Gate) ⚠ heavier day
 
-**Phase:** Week 2 — Provider & tools
+**Phase:** Week 2 — Provider & tools · **Size:** two sittings
 
 ## By tonight
 
@@ -18,16 +18,11 @@ Look at the three marks. `→` is the model asking for a tool, `allow …?` is t
 
 ## Why it matters
 
-For four days you've built parts: a provider that talks to the model, a registry that holds tools, a jail, and tools that read, write, edit and run commands. Nothing yet connects them. Today you write the engine that does.
+For four days you've built parts: a provider that talks to the model, a registry that holds tools, a jail, and tools that read, write, edit and run commands. Nothing yet connects them. Today you write the engine that does, `AgentLoop`, and it has to be boringly correct, because the ways a loop goes wrong are quiet.
 
-`AgentLoop` is that engine, and it has to be boringly correct:
-- tools are looked up fresh every turn;
-- every tool call gets exactly one result, in order;
-- runaway loops stop;
-- bad tool calls become results the model can learn from;
-- **risky tools are denied unless someone approves them.**
+Picture the finished harness a few weeks from now. An extension adds a tool while the program runs, but the loop fetched its tool list once, at startup, so the model never hears of it, and you spend an evening asking why your tool is invisible. Later the model asks for three commands at once. The loop answers two, calls the model again, and a hosted API rejects the whole request, because one call has no result. Then someone runs the harness from a script with no approver attached, and a loop whose approval check defaults to "yes" quietly runs every shell command the model proposes. Each of those is a bug that some harness, somewhere, has shipped.
 
-Each of those is a bug that some harness, somewhere, has shipped. A loop that caches its tools can't see one added later. A loop that answers two calls out of three sends the model a history the server rejects. A loop whose approval check defaults to "yes" runs shell commands nobody saw. The loop is short, but it's the code every other day leans on, so it's worth writing slowly.
+So today's loop looks tools up fresh every turn, answers every tool call exactly once and in order, stops runaway loops, turns bad tool calls into results the model can learn from, and **denies risky tools unless someone approves them.** The loop is short, but it's the code every other day leans on, so it's worth writing slowly.
 
 This is a heavier day, but you know its shape already: it's the toy's `runTurns` from Days 2–3, grown up.
 
@@ -89,7 +84,7 @@ The pseudocode hides several rules inside single lines. The rest of this section
 
 ### 2. The tool-pair invariant
 
-A call and its results are one unit. An assistant message with `toolCalls` is followed by **one result per call, in the same order**, before the provider is called again. Tomorrow, abort keeps this true as well ([contract](README.md#tool-pair-history-invariant)).
+A call and its results are one unit. An assistant message with `toolCalls` is followed by **one result per call, in the same order**, before the provider is called again. Tomorrow, abort keeps this true as well ([contract](reference.md#tool-pair-history-invariant)).
 
 ```
 ✓  assistant { toolCalls: [call_1, call_2] }
@@ -258,7 +253,7 @@ The order follows the advice in concept 1: words before code. The pseudocode goe
 
 ### 12.1 Pseudocode — Core
 
-Copy and adapt concept 1 into `notes/day-12.md` **before** writing any code. Mark where the tools are fetched, where the pair is appended, where `executeTool` can return `isError`, and every return path.
+Copy and adapt concept 1 into `notes/day-12.md` **before** writing any code. Mark where the tools are fetched, where the pair is appended, where `executeTool` can return `isError`, and every return path. I wouldn't skip this, even with the code a page below: the order of those few lines is the whole difficulty of today, and it's far easier to get right on paper.
 
 ### 12.2 `src/agent/agent-schemas.js` — Core
 

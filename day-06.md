@@ -1,6 +1,6 @@
 # Day 6 — Read Pi, Design Your Harness
 
-**Phase:** Week 1 — Hello, agent
+**Phase:** Week 1 — Hello, agent · **Size:** one sitting
 
 ## By tonight
 
@@ -28,7 +28,7 @@ So today you read before you build. You'll read one serious, open-source harness
 
 The day ends with something you can run: a small state machine that checks whether a sequence of loop events could have come from a correct loop. It's your design's sharpest rule, written as a test, and on Day 14 your real loop has to pass it.
 
-> **Behind?** Day 6 is lighter on purpose: it's the week's slack. If any check from Days 1–5 is red, fix it first: Day 7 builds on the Day 4–5 modules, not on today's notes.
+> **Behind?** Day 6 is the lightest day of week 1 on purpose: an essay to skim, three short reads, a rough draft and one small state machine. It's the week's slack. If any check from Days 1–5 is red, fix it first: Day 7 builds on the Day 4–5 modules, not on today's notes.
 
 ## Concepts
 
@@ -99,7 +99,15 @@ With the syntax covered, the next question is which of Pi's files to open at all
 
 ### 2. Where things live in Pi
 
-A big repository rewards a plan. You won't read all of Pi, and you don't need to. Today you need its shapes, its event order, and a few files that show its decisions. The vendored copy is `reference/pi` (package version 0.80.3). Paths are relative to it:
+A big repository rewards a plan. You won't read all of Pi, and you don't need to. Today you need its shapes, its event order, and a few files that show its decisions.
+
+You'll read Pi's source at the version this course was checked against. Clone it once, into a `reference/` folder beside your project (the folder that also holds `agent-harness-curriculum`):
+
+```bash
+git clone --depth 1 --branch v0.80.3 https://github.com/earendil-works/pi.git reference/pi
+```
+
+The clone is about 23 MB. Pi has kept moving since 0.80.3, and later versions add and remove whole packages, so clone the tag rather than the latest code. Paths are relative to `reference/pi`:
 
 | What | Where |
 |---|---|
@@ -112,13 +120,13 @@ A big repository rewards a plan. You won't read all of Pi, and you don't need to
 | CLI arguments (`Args`, `parseArgs`) | `packages/coding-agent/src/cli/args.ts` |
 | Terminal UI library | `packages/tui/src/` (post-course) |
 
-`packages/ai`, `packages/orchestrator` and `packages/pods` exist too. None of them is the loop, so skip them. Read the files in the table, in 6.2's order, and leave everything else for later. One warning before you open them: the names you'll find there aren't ours.
+`packages/ai` and `packages/orchestrator` exist too. Neither is the loop, so skip them. Today's core reading is the first three rows of the table, in 6.2's order. The rest are for Stretch 6.7, and for Day 30, when you come back to compare designs. One warning before you open anything: the names you'll find there aren't ours.
 
 ### 3. Vocabulary differences (know them before you read)
 
 Pi and this course name events differently. That's normal: every harness picks its own words for the same few moments. But it will trip you up if you don't expect it. Pi's `AgentEvent` includes `agent_start`/`agent_end`, `turn_start`/`turn_end`, `message_start`/`message_update`/`message_end` and `tool_execution_start`/`_update`/`_end`. A **different** union, in `packages/agent/src/harness/types.ts`, has hook events named `tool_call` and `tool_result`. Don't merge the two lists.
 
-Ours ([canonical events](README.md#canonical-event-list)) keeps `agent_start`/`agent_end` and `turn_start`/`turn_end`. It streams `text_delta` and `thinking_delta` instead of `message_update`, splits a tool into `tool_call_start` / `tool_call_end` / `tool_result`, and adds approval events.
+Ours ([canonical events](reference.md#canonical-event-list)) keeps `agent_start`/`agent_end` and `turn_start`/`turn_end`. It streams `text_delta` and `thinking_delta` instead of `message_update`, splits a tool into `tool_call_start` / `tool_call_end` / `tool_result`, and adds approval events.
 
 Here is the same run in both vocabularies, for a text-only answer. Pi also announces each whole message, including your prompt, with a start and an end. Ours streams the pieces and leaves your message to the UI:
 
@@ -317,7 +325,7 @@ Why go to this trouble? Because the bugs that matter most in a loop are bugs of 
 
 ## Build
 
-Today's build is mostly reading and writing prose. Read first (6.1 and 6.2), so you have Pi's decisions in front of you. Then write your own design (6.3), and finish by turning its sharpest rule into a test (6.4).
+Today's build is mostly reading and writing prose. Read first (6.1 and 6.2), so you have Pi's decisions in front of you. Then write your own design (6.3), and finish by turning its sharpest rule into a test (6.4). The reading is short on purpose: three files today, and the rest of Pi's agent package waits for Stretch 6.7.
 
 **Files today:** `notes/day-06.md`, `docs/architecture.md`, `tests/helpers/event-protocol.js` and `tests/event-protocol.test.js`.
 
@@ -327,32 +335,20 @@ Read Mario Zechner's [What I learned building an opinionated and minimal coding 
 
 ### 6.2 Map Pi's agent package — Core
 
-Read these, in this order. It's concept 1's method: the table of contents first, then the types, then just enough code to follow one turn.
+Read these three, in this order. It's concept 1's method: the table of contents first, then the types, then the one method that decides how events reach a listener.
 1. `packages/agent/src/index.ts`;
 2. the `AgentEvent` union in `types.ts`;
-3. in `agent.ts`, `subscribe()` and the comment above it;
-4. in `agent-loop.ts`, `AgentEventSink`, then follow one turn;
-5. `packages/coding-agent/src/core/tools/index.ts`, and the top of `bash.ts`;
-6. the comment above `class SessionManager` in `session-manager.ts`;
-7. the `Args` type in `src/cli/args.ts`. Compare it with your Day 5 parser.
+3. in `agent.ts`, `subscribe()` and the comment above it.
 
-In your notes, do two things:
-- **Draw the call graph** (boxes and arrows are enough): who builds the agent, who receives events, where tools execute, and where the session file is written. For the format, here is your own toy's call graph:
+Then, in your notes, **fill in an event divergence table** with three columns: *Pi `AgentEvent`*, *our canonical event(s)*, and *why different*. Fill in at least the rows `turn_start`, `message_update`, `tool_execution_start`, `tool_execution_update` and `tool_execution_end`. Add a separate, clearly labelled row for the hook event `tool_call` (concept 3 says where it lives). Your "why" for `tool_execution_end` should explain why we keep `tool_result` as its own record: the UI shows it, and the [tool-pair invariant](reference.md#tool-pair-history-invariant) stores it.
 
-  ```
-  main.mjs ──creates──▶ createOllamaClient
-  main.mjs ──calls────▶ runTurns ──calls──▶ client.chat ──HTTP──▶ Ollama
-                            ├──calls──▶ confirm ──asks──▶ you (readline)
-                            └──calls──▶ runTool ──spawns──▶ sh
-  ```
-
-- **Fill in an event divergence table** with three columns: *Pi `AgentEvent`*, *our canonical event(s)*, and *why different*. Fill in at least the rows `turn_start`, `message_update`, `tool_execution_start`, `tool_execution_update` and `tool_execution_end`. Add a separate, clearly labelled row for the hook event `tool_call`. Your "why" for `tool_execution_end` should explain why we keep `tool_result` as its own record: the UI shows it, and the [tool-pair invariant](README.md#tool-pair-history-invariant) stores it.
+Following one turn through the rest of Pi, and drawing its call graph, is Stretch 6.7. It's worth doing, but nothing in the next week depends on it.
 
 ### 6.3 `docs/architecture.md`, first draft — Core
 
 This is a first draft, and it's allowed to be rough. Its job is to make decisions visible, so that later days can follow them or change them on purpose.
 
-1. **Folders.** Copy the [target tree](README.md#project-structure-target) and write one or two sentences of rationale for each `src/` folder. Say what depends on what, and what must **never** depend on the UI: the loop, the tools and the sessions.
+1. **Folders.** Copy the [target tree](README.md#project-structure-target). Under it, write the one rule that matters most: what must **never** depend on the UI (the loop, the tools and the sessions), and why. A sentence of rationale for each folder is welcome, but it can wait for Buffer 2, when you redraw this file from your real code.
 2. **Event flow.** Add this diagram and adjust it to your taste:
 
    ```mermaid
@@ -370,12 +366,12 @@ This is a first draft, and it's allowed to be rough. Its job is to make decision
    Read it left to right. The UI puts what you type on the bus. The bridge hears it and starts a run on the loop. The loop calls the provider and the tools, and puts its own events on the bus, where the UI hears them and draws them. The bridge also reads the history from the session, and hands it each finished run to save.
 3. **The approval pause.** A `needsApproval` tool asks the user and waits. **A timeout or an abort means deny.** A denial is a normal tool result (`User denied bash`), and the loop continues.
 4. **The busy policy.** Input typed during a run is **queued** and sent next. (Rejecting it is the acceptable fallback.)
-5. **From toy to harness.** Make a table of everything the toy lacks, using your Day 1 notes and today's reading, and the day of this course that builds each item (see the [plan](README.md#the-30-day-plan)). Typical items: a tool registry, file tools with a jail, an approval policy, sessions, events, a real UI, slash commands, compaction, extensions, MCP, settings and evals.
-6. **Pi.** List what you copy from Pi and where you differ, using concept 4 and your own reading.
+5. **From toy to harness (optional).** If you kept the list from Day 1's stretch 1.10, paste it here, and next to each item write the day of this course that builds it (see the [plan](README.md#the-30-day-plan)). Typical items: a tool registry, file tools with a jail, an approval policy, sessions, events, a real UI, slash commands, compaction, extensions, MCP, settings and evals.
+6. **Pi.** Paste concept 4's table of what we copy and where we differ, and add one line of your own from today's reading.
 
 ### 6.4 The event protocol, executable — Core
 
-Turn concept 6 into code that tests can import. In `tests/helpers/event-protocol.js`:
+Turn concept 6 into code that tests can import. If today's energy runs short, I'd spend what's left here rather than on the prose: this file is the part of today that later days actually run. In `tests/helpers/event-protocol.js`:
 
 ```js
 /** state → { event → next state }. Fill in every row from the diagram. */
@@ -432,6 +428,23 @@ Add traces for the other approval endings: a denial, a 120-second timeout, and C
 
 Read Pi's `bash.ts` past the top. How does it handle output size, timeouts and the processes a command starts? Note one thing to steal for your Day 11 `bash` tool.
 
+### 6.7 Follow one turn through Pi — Stretch
+
+Read the rest of the agent package, in this order:
+1. in `agent-loop.ts`, `AgentEventSink`, then follow one turn;
+2. `packages/coding-agent/src/core/tools/index.ts`, and the top of `bash.ts`;
+3. the comment above `class SessionManager` in `session-manager.ts`;
+4. the `Args` type in `src/cli/args.ts`. Compare it with your Day 5 parser.
+
+Then **draw the call graph** in your notes (boxes and arrows are enough): who builds the agent, who receives events, where tools execute, and where the session file is written. For the format, here is your own toy's call graph:
+
+```
+main.mjs ──creates──▶ createOllamaClient
+main.mjs ──calls────▶ runTurns ──calls──▶ client.chat ──HTTP──▶ Ollama
+                          ├──calls──▶ confirm ──asks──▶ you (readline)
+                          └──calls──▶ runTool ──spawns──▶ sh
+```
+
 ## Check
 
 You've read a real harness the way professionals read code, from its types inward, and you know where yours will follow it and where it won't. Above all, you've chosen a bus that never waits on its listeners, and an approval gate built into the core. You have a design on paper, and its most important rule, the order of the loop's events, is a test that any loop can be run against.
@@ -440,8 +453,8 @@ Tomorrow the real harness begins. [Day 7](day-07.md) starts at the bottom, with 
 
 Before you move on, check:
 
-- [ ] `notes/day-06.md`: essay takeaways, the Pi call graph and the divergence table
-- [ ] `docs/architecture.md` draft: folder rationale, event flow, approval pause, busy policy, the toy-to-harness table, and Pi copy/differ notes
+- [ ] `notes/day-06.md`: essay takeaways and the divergence table
+- [ ] `docs/architecture.md` draft: the target tree with its never-depends-on-the-UI rule, the event flow, the approval pause, the busy policy and the Pi notes
 - [ ] `node --test tests/event-protocol.test.js` passes
 - [ ] Commit `day-06: architecture draft + event protocol`
 
@@ -451,7 +464,7 @@ Solution: `tests/helpers/event-protocol.js` and `tests/event-protocol.test.js` i
 
 <details><summary>A path in the table above doesn't exist</summary>
 
-Check that you're inside `reference/pi` and that the vendored version is 0.80.3 (`packages/agent/package.json`). If Pi has moved on since, search `packages/agent/src` for `AgentEvent` and note the new path in your notes.
+Check that you're inside `reference/pi` and that you cloned the tag: `packages/agent/package.json` should say `"version": "0.80.3"`. A clone of the latest code has a different layout. Clone again with concept 2's command, or search `packages/agent/src` for `AgentEvent` and note the new path in your notes.
 </details>
 
 <details><summary>Pi's TypeScript is hard to follow</summary>

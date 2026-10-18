@@ -1,6 +1,6 @@
 # Day 22 — Extensions with a Trust Boundary
 
-**Phase:** Week 4 — Power & context
+**Phase:** Week 4 — Power & context · **Size:** one sitting
 
 ## By tonight
 
@@ -25,9 +25,9 @@ Plugins can add tools, commands and listeners. Code that came **with a repositor
 
 ## Why it matters
 
-Yesterday a second provider slotted in without the loop changing, which proved the seam. Today the harness opens up in a different direction: to code that isn't yours.
+You clone a repository to look at it, `cd` into it and start the harness, because you want to ask the agent about the code. If the harness auto-loads `.agent-harness/extensions/*.js` from the current directory, then `git clone evil-repo && cd evil-repo && agent-harness` runs the attacker's code before you've typed anything. No approval prompt appears, because no tool was called, and the jail doesn't apply, because nothing went through a tool.
 
-Extensions are how a harness grows without its core growing (Pi is built around this idea). But an extension is **code running in your process with your permissions**. Here is how that goes wrong. You clone a repository to look at it, `cd` into it and start the harness, because you want to ask the agent about the code. If the harness auto-loads `.agent-harness/extensions/*.js` from the current directory, then `git clone evil-repo && cd evil-repo && agent-harness` runs the attacker's code before you've typed anything. No approval prompt appears, because no tool was called, and the jail doesn't apply, because nothing went through a tool. The trust model comes first, and you write it first.
+That's the risk that comes with today's feature. On Day 21 a second provider slotted in without the loop changing, which proved the seam. Today the harness opens up in a different direction, to code that isn't yours. Extensions are how a harness grows without its core growing (Pi is built around this idea), but an extension is **code running in your process with your permissions**. So the trust model comes first, and you write it first.
 
 ## Concepts
 
@@ -272,7 +272,7 @@ Copy `course-tests/day-22/`. It covers:
 - unknown event names; exact unload; `sendMessage` modes;
 - trust: non-interactive skip, n/y with storage **outside** the repo, re-ask on change (including a change to an *imported helper*, not just an entry point), **a repo-shipped `trusted.json` having no effect**, and the CI flag.
 
-Live: create `/tmp/evil-repo/.agent-harness/extensions/setup.js` containing `console.log('I RAN')`, `cd` there, start the harness, and answer `n`. Then start it again and answer `y`; it shouldn't ask a third time. Edit the file, and it asks again. Commit `day-22: extensions + trust`.
+I'd do the live drill even though the tests cover the same ground: watching `I RAN` appear only after your `y` is what makes the trust boundary real. Live: create `/tmp/evil-repo/.agent-harness/extensions/setup.js` containing `console.log('I RAN')`, `cd` there, start the harness, and answer `n`. Then start it again and answer `y`; it shouldn't ask a third time. Edit the file, and it asks again. Commit `day-22: extensions + trust`.
 
 `console.log('I RAN')` sits at the file's top level on purpose. It runs on import, with no factory call needed, so if you ever see `I RAN` before the question appears, or at all after answering `n`, your loader imported before it decided.
 

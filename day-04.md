@@ -1,6 +1,6 @@
-# Day 4 — Streams and Bytes: Make It Stream ⚠
+# Day 4 — Streams and Bytes: Make It Stream ⚠ heavier day
 
-**Phase:** Week 1 — Hello, agent
+**Phase:** Week 1 — Hello, agent · **Size:** two sittings
 
 ## By tonight
 
@@ -15,11 +15,11 @@ No more waiting in silence. Text appears as the model produces it, and the model
 
 ## Why it matters
 
-Yesterday you made Ctrl+C work, so you can stop the toy whenever you like. Today you fix the other thing you probably wrote in your Day 1 notes: the wait. A model that thinks for 20 seconds before saying anything feels broken, even when it's working perfectly. The fix is **streaming**: asking the model to send its answer in small pieces as it writes them, and showing each piece the moment it arrives.
+A model that thinks for 20 seconds before saying anything feels broken, even when it's working perfectly. That's the other thing you probably wrote in your Day 1 notes: the wait. Since yesterday you can stop the toy whenever you like, and today it learns to show its work as it goes. The fix is **streaming**: asking the model to send its answer in small pieces as it writes them, and showing each piece the moment it arrives.
 
 Streaming has a catch, and it's the real subject of today. The pieces arrive as **chunks of bytes that know nothing about lines or characters**. A chunk can end in the middle of a line, or even in the middle of a single character, and code that assumes otherwise works perfectly on English test data and breaks on the first `é`. Today you learn to put the pieces back together correctly. The same ideas also fix the `out.slice(0, 4000)` from Day 1, which can cut a character in half.
 
-This is a heavier day, with three new ideas that build on each other. Generators give you a way to consume values that arrive over time. Bytes and characters explain why chunks are dangerous. NDJSON framing puts the two together. Take them in order, and run the examples as you go.
+This is a heavier day, with three new ideas that build on each other. Generators give you a way to consume values that arrive over time. Bytes and characters explain why chunks are dangerous. NDJSON framing puts the two together. Take them in order, and run the examples as you go. Python's generators work almost exactly like concept 1's, so a Python reader can skim it and slow down at concept 2, where the waiting starts.
 
 ## Concepts
 
@@ -363,7 +363,7 @@ Framing handles input that arrives in pieces. The opposite problem is output too
 
 ### 5. The truncation contract
 
-**Tool output has to fit.** A command can print megabytes, and everything a tool returns goes into the conversation, which must fit in the model's context window (Day 1). So the harness caps it. The README's [truncation contract](README.md#tool-output-truncation-contract) caps tool output at **32 KiB of UTF-8**, never splits a character, and ends with a marker that says what was cut and how to see more:
+**Tool output has to fit.** A command can print megabytes, and everything a tool returns goes into the conversation, which must fit in the model's context window (Day 1). So the harness caps it. The reference page's [truncation contract](reference.md#tool-output-truncation-contract) caps tool output at **32 KiB of UTF-8**, never splits a character, and ends with a marker that says what was cut and how to see more:
 
 ```
 ...[truncated: showing 32768 of 120004 bytes. Use read with offset/limit or a narrower command to see more.]
@@ -383,15 +383,19 @@ The first call keeps `héll`: 5 bytes, because `é` takes two. The second call s
 
 **The advice at the end is a parameter.** The real harness has a `read` tool (Day 10), so that's the default. The toy has no `read` tool, so it passes its own advice. Never point the model at a tool it doesn't have: it will try to call it. (Day 11 adds a second mode for command output, which keeps the head *and* the tail.)
 
-One last question about streams: what happens when data arrives faster than you can use it?
+One last rule is about patience: don't wait for the whole response before you use any of it.
 
-### 6. Backpressure (advanced)
+### 6. Consume a response as it arrives
+
+**Read a response as it arrives.** `await res.text()` waits for the whole body and holds all of it in memory before you see a single character. For a model's reply, that's the 20-second silence streaming exists to fix. Never buffer a whole response "for convenience": read it a piece at a time, with a reader or `readNdjson`, as the toy will tonight.
+
+<details><summary>Going deeper: backpressure, or why reading slowly is safe</summary>
 
 **A stream produces only as fast as you read.** A `ReadableStream` sits between a *source*, which produces chunks, and you, the consumer. It keeps a small queue of chunks in between. When the queue is full, it stops asking its source for more, and it starts again when you `read()` and make room. This is **backpressure**: the consumer's pace pushes back on the producer. Over a network, TCP passes the same pressure back to the sender. So if you `await` each `read()`, a fast producer can't run far ahead of you: the stream waits.
 
-It's the pull model from concept 1 again, with a small buffer in the middle. The consumer asks, and only then does the producer make more.
+It's the pull model from concept 1 again, with a small buffer in the middle. The consumer asks, and only then does the producer make more. Stretch 4.6 lets you watch backpressure happen.
 
-**So consume a response as it arrives.** `await res.text()` waits for the whole body and holds all of it in memory before you see a single character. For a model's reply, that's the 20-second silence streaming exists to fix. Never buffer a whole response "for convenience". Stretch 4.6 lets you watch backpressure happen.
+</details>
 
 ## Build
 
@@ -469,7 +473,7 @@ Measure and cut as concept 3 does: `Buffer.from(text)`, back up from `maxBytes` 
 
 ### 4.4 Find the bug you wrote on Day 3 — Core
 
-Your `runBash` does `out += chunk`. Each `chunk` is a `Buffer`, and `+=` turns each one into a string *on its own*: a fresh decoder per chunk, exactly what concept 3 warns about. Prove it. Create `scratch/split-utf8.mjs`:
+I think this is the best step of the week: the bug is one you wrote yourself, and you get to watch it happen. Your `runBash` does `out += chunk`. Each `chunk` is a `Buffer`, and `+=` turns each one into a string *on its own*: a fresh decoder per chunk, exactly what concept 3 warns about. Prove it. Create `scratch/split-utf8.mjs`:
 
 ```js
 // Writes "hé!" with the two bytes of "é" in separate chunks, 100 ms apart.

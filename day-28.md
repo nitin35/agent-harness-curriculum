@@ -1,6 +1,6 @@
 # Day 28 — `@file` References, Tab Completion, Multi-line Input, and the Integration Suite
 
-**Phase:** Week 5 — Product & proof
+**Phase:** Week 5 — Product & proof · **Size:** one sitting
 
 ## By tonight
 
@@ -27,7 +27,7 @@ These are the last everyday-UX features: attach files by typing `@`, Tab-complet
 
 ## Why it matters
 
-Yesterday you attacked your own harness and turned every defense into a test. Today adds the last everyday features, and the first of them is a new way for data to reach the model, so it inherits the same defenses from the start.
+Day 27 turned every defense into a test. Today adds the last everyday features, and the first of them is a new way for data to reach the model, so it inherits the same defenses from the start.
 
 `@file` is the fastest way to give a model exactly the context it needs. It's also another way for data to reach the model, so it gets **the same jail, the same binary check and the same truncation contract** as `read`. And before you ship (Day 30), you want one suite that proves every subsystem still works **together**.
 
@@ -53,7 +53,7 @@ extractRefs('see:@src/a.js')                            // → []: ':' isn't whi
 extractRefs('no refs here')                             // → []
 ```
 
-The third line is the price of a small grammar: `see:@src/a.js` attaches nothing, because the `@` doesn't follow whitespace. A rule you can state in one sentence is better than a clever one that guesses. When an `@` isn't recognised, the message goes out as plain text.
+The third line is the price of a small grammar: `see:@src/a.js` attaches nothing, because the `@` doesn't follow whitespace. I'd keep the grammar this small even if users ask for more: a rule you can state in one sentence is better than a clever one that guesses. When an `@` isn't recognised, the message goes out as plain text.
 
 Once the refs are found, the files they name have to be read and put into the message.
 
@@ -241,7 +241,7 @@ Rank by **recency** (`mtime`) after prefix match, and complete `/model <Tab>` wi
 
 ## Check
 
-The harness now has its everyday comforts, and none of them opened a new hole. An `@` ref follows a small written grammar, goes through the same jail, binary check and truncation as `read`, and fits a shared budget sized to the window, and a single failed ref stops the whole message. Tab completes commands and paths with a breadth-first search that never walks into `node_modules`. A `<<<` block sends several lines as one message, without promising a key the terminal can't report. And an integration suite runs the whole pipeline, from attachment to approval to resume, with every test in its own folder so the suite can run in parallel.
+Everyday comforts arrived today, and none of them opened a new hole. An `@` ref follows a small written grammar, goes through the same jail, binary check and truncation as `read`, and fits a shared budget sized to the window, and a single failed ref stops the whole message. Tab completes commands and paths with a breadth-first search that never walks into `node_modules`. A `<<<` block sends several lines as one message, without promising a key the terminal can't report. And an integration suite runs the whole pipeline, from attachment to approval to resume, with every test in its own folder so the suite can run in parallel.
 
 Tomorrow, [Day 29](day-29.md) measures the harness instead of testing it: evals, which check how often a real model gets a task right.
 

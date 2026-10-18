@@ -1,5 +1,27 @@
 # Changelog: the 2026-10 edition
 
+## 2026-10-18: a readability pass, for readers who stay to the end
+
+An end-to-end review asked one question: will a newcomer enjoy this enough to finish it? The writing held up, but the structure didn't always. The front of the course was its heaviest and least rewarding stretch, the narrator went quiet after Day 3, and the README read like a specification after its first screen. This pass changes, on purpose, elements the voice pass kept fixed: H1s, Phase lines, five *By tonight* blocks, and two days' build steps and Check items. No code, course test, solution or measured number changed.
+
+- **The README is a front door again.** The canonical contracts, the glossary, the troubleshooting table and the Pi map moved, word for word, to a new `reference.md`, which the sidebar lists under Reference and the runnable check covers. The README keeps the pitch, the plan, setup, checkpoints, the reading list and what comes after. Every link into the moved sections now points at `reference.md`, and the README's hero transcript shows the prompt and approval question the harness really prints.
+- **Who it's for.** The README no longer asks for intro-level JavaScript, since Day 2 starts from `typeof`, and it no longer promises "no throwaway drills" for a week that has scratch-file experiments. Its environment table lists Pi.
+- **Size, honestly.** Every day's Phase line now says **one sitting** or **two sittings**. The two-sitting days carry "⚠ heavier day" in their H1, in the README's plan table and in its list: Days 2, 3, 4, 5, 11, 12, 15, 16, 20, 23, 24, 25 and 26. Before, the table marked four days, the list eight, the H1s used two labels, and Days 2 and 3, the longest, were unmarked.
+- **Day 2 gets a payoff.** A new Core step, 2.5 *One missing `await`, on purpose*, has the reader delete the `await` before `confirm` and watch the toy run a command without asking. *By tonight* shows that run and the fixed one, both captured live (Ollama 0.40.6, `qwen3.5:4b`, a Day 2 toy built from the day's own text). The twelve-expression guessing game moved to the top of Concepts, so the guesses come before the answers, and 2.1 now checks them. The old 2.5–2.7 are now 2.6–2.8.
+- **Skim guidance and *Going deeper* boxes.** Days 2–5 tell Python and C++ readers what they can skim and what they mustn't. Day 3's CommonJS/ESM `nextTick` detail and its combinator demo, and Day 4's backpressure, moved into collapsed *Going deeper* boxes. Day 4's concept 6 is now *Consume a response as it arrives*, with the rule in view and the mechanism in the box.
+- **Day 6 is light, and Pi is reachable.** No page said how to get Pi. Day 6 and the reference page now give `git clone --depth 1 --branch v0.80.3 https://github.com/earendil-works/pi.git reference/pi`. `packages/pods`, listed as existing, isn't in 0.80.3 (a local copy had an old build folder by that name), so it's gone from the text. Day 6's core reading is three files, the call graph and the rest of Pi's agent package moved to a new Stretch 6.7, and the architecture draft keeps only what later days use. Its Check items follow.
+- **Something to see in week 2.** *By tonight* on Day 7 shows the PELICAN-42 experiment (7.4's measured numbers), Day 9 the description experiment's table (9.4's), Day 10 the jail refusing step 10.5's two escapes (real output from the reference tools), and Day 11 the toy running a backgrounded `sleep` through the real `bash` tool (captured live, with `pgrep` checked inside the 25 seconds).
+- **The narrator stays.** Every day now has an opinion or a recommendation in the first person. Before, only Days 1–3 did.
+- **Openings and closings vary.** No *Why it matters* opens with "Yesterday" any more, where twenty did, and Days 3, 4, 10, 16, 17, 20, 22, 23, 24, 27 and 29 open with their story and give the recap second. Check sections that open with a "now" sentence went from 21 to 8.
+- **Milestones get a moment.** Checkpoints 1–3 compare the reference engine's size (about 1,100, 1,600 and 3,100 lines of code, without blanks and comments) with the 70-line toy. Day 15 pauses on the first chat, and Day 26 on `agent-harness --version`. Day 1 now asks you to keep `notes/day-01.md`, and Day 30 sends you back to it.
+- **Smaller fixes.** Day 12's and Day 23's *Why it matters* tell their failures as stories. Day 20's sentence about the `settled` flag is split in two. Day 7 ends with a `Solution:` line like every other day. Day 5 no longer calls itself the end of week one.
+
+**Verified:**
+- `check_day.py`, run against each committed day, reports changes only to the elements listed above;
+- every internal link and anchor resolves (231 links, slugs from github-slugger), `npm run check:runnable` passes (91 of 91), and `npm run docs:build` succeeds;
+- the Pi clone command was run, and every Pi path the course names exists at v0.80.3;
+- the new transcripts come from real runs on Ollama 0.40.6.
+
 ## 2026-10-04: fixes for what the second pass found
 
 The second pass listed problems in the code and the tests under "Found, not changed". These are now fixed. Each fix has a new check inside an existing course test, so every test count in the course stays the same (329 course tests in `solutions/final`). The changed course tests are copied into every snapshot that has them. Every new check was shown to fail against the old code and to pass against the new.

@@ -1,6 +1,6 @@
 # Day 25 — Compaction, and Checkpoint 3 ⚠ heavier day
 
-**Phase:** Week 4 — Power & context · **Checkpoint 3**
+**Phase:** Week 4 — Power & context · **Checkpoint 3** · **Size:** two sittings
 
 ## By tonight
 
@@ -195,7 +195,7 @@ The ISO dates sort into time order, and the US-style dates don't, because as tex
 
 ### 25.1 On paper — Core
 
-In `notes/day-25.md`, draw a path where the naive cut lands inside a tool pair. Show the forward move and the `… → C → kept … → leaf` result. Then write down the 32 KiB-vs-8k-window problem in one sentence.
+Don't skip this step: I think drawing one bad cut by hand teaches the rule better than any test can. In `notes/day-25.md`, draw a path where the naive cut lands inside a tool pair. Show the forward move and the `… → C → kept … → leaf` result. Then write down the 32 KiB-vs-8k-window problem in one sentence.
 
 Concept 2's ten-entry diagram is the model to follow. Try one where the pair has two results, and one where the latest user message stops rule 1.
 
@@ -275,6 +275,8 @@ Replace the truncated transcript with a model-written summary: a second `chat()`
 ## Check
 
 That's Checkpoint 3: a harness whose conversations can run as long as you like. Past 80% of the real window, the oldest part of the active path is folded into one compaction record, a transcript with tool output shortened first and the whole cut at both ends. The cut never splits a tool pair and never folds the question being answered. One `parentId` changes, the file is rewritten atomically, and nothing is deleted, so other branches stay byte-for-byte the same. When a single run outgrows the window, its older tool results shrink in place instead. And usage measured before a compaction is ignored, so compaction doesn't trigger itself again on every call.
+
+That's the last checkpoint, and it's worth a look back. The reference harness has grown to about 3,100 lines of code in 50 modules, with 281 course tests behind it, and every rule you've added since Day 1 still holds, however long the conversation runs. What's left is turning it into a product, and then attacking it.
 
 Next comes [Buffer 2](buffer-2.md), a day to catch up, repair or go further. Then [Day 26](day-26.md) turns the harness into a real command, with layered settings and a scriptable `-p` mode.
 

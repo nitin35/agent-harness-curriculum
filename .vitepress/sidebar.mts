@@ -63,6 +63,7 @@ export function buildSidebar(root: string): Group[] {
     {
       text: 'Reference',
       items: [
+        ...(fs.existsSync(path.join(root, 'reference.md')) ? [{ text: 'Contracts, glossary, troubleshooting', link: '/reference' }] : []),
         { text: 'Self-check answers', link: '/self-check-answers' },
         { text: 'Changelog', link: '/CHANGELOG' },
       ],

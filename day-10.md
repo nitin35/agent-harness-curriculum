@@ -1,24 +1,33 @@
 # Day 10 — The Workspace Jail, `read` and `write`
 
-**Phase:** Week 2 — Provider & tools
+**Phase:** Week 2 — Provider & tools · **Size:** one sitting
 
 ## By tonight
 
-```js
-await read.execute({ path: 'notes/day-09.md' }, {});      // → { content: '…', isError: false, details: { totalLines: 41, … } }
-await read.execute({ path: '../../etc/passwd' }, {});     // → { isError: true, content: "Cannot read: path '../../etc/passwd' is outside the workspace" }
-await read.execute({ path: 'link-to-home/.ssh/id_ed25519' }, {});  // → { isError: true, content: "…resolves through a symlink to outside the workspace" }
-await write.execute({ path: 'planted.md', content: 'x' }, {});   // planted.md is a DANGLING link to a file outside → refused, nothing created
-await write.execute({ path: 'out/hello.txt', content: 'héllo' }, {});  // → { content: 'Created out/hello.txt (6 bytes).' }
+```
+$ mkdir -p /tmp/jail-test
+$ ln -s ~ /tmp/jail-test/home                            ← a link to your home folder
+$ ln -s /tmp/outside-$$.txt /tmp/jail-test/planted.md    ← a link to a file that doesn't exist yet
+$ node scratch/escape.mjs
+{
+  content: "Cannot read: path 'home/.bashrc' resolves through a symlink to outside the workspace",
+  isError: true
+}
+{
+  content: "Cannot write: path 'planted.md' resolves through a symlink to outside the workspace",
+  isError: true
+}
 ```
 
-Read those five lines as two successes and three refusals. The harness can touch files, but only **inside the workspace**: a path that climbs out is refused, and so is one that escapes through a symlink, even a link whose target doesn't exist yet. Big files come back truncated with an instruction for the model, never silently cut.
+That's you trying to break out of your own jail. The workspace is `/tmp/jail-test`, and both paths look innocent: `home/.bashrc` and `planted.md` sit inside it. But `home` is a link to your home folder, and `planted.md` is a *dangling* link to a file outside that doesn't exist yet, exactly the kind of trap a hostile repository can plant. Your `read` and `write` tools refuse both before touching anything, and afterwards `ls /tmp/outside-*.txt` finds nothing: the write never happened.
+
+Behind those refusals is the workspace jail, which checks every path twice, once as text and once against the file system, so a path that climbs out with `..` is refused too. On top of it sit the first tools that touch your real files. `read` hands the model a window of lines and says what it left out, so a big file comes back truncated with an instruction for the model, never silently cut. `write` says whether it created a file or overwrote one.
 
 ## Why it matters
 
-Yesterday you wrote the contract every tool follows. Today come the first tools that touch your real files, and with them the first real danger.
+A confused model asks for `../../etc/passwd`. A file it reads tells it what to do next, as Day 1's stretch 1.9 showed. Every path a file tool touches is chosen by the model, and the model can be wrong or manipulated.
 
-The model chooses paths, and the model can be wrong or manipulated. A confused model asks for `../../etc/passwd`. A file it reads can tell it what to do, as Day 1's stretch 1.9 showed. Day 27's red team will try `../../.ssh`, a planted symlink, and a planted *dangling* symlink. The **jail** stops those mechanically, whatever the model "decides".
+Until today, the only way to reach a file was the toy's `bash`, and you read every command before typing `y`. Yesterday you wrote the contract every tool follows, and today come the first tools that touch your real files directly, with paths the model picks. Day 27's red team will try `../../.ssh`, a planted symlink, and a planted *dangling* symlink. The **jail** stops those mechanically, whatever the model "decides".
 
 Approval can't do that job. The question you'd see is `write planted.md`, and nothing in it says that `planted.md` is a link pointing outside your project. You'd say yes, because there's nothing to say no to. So the check has to happen in code, on every path, before anything is opened. And because files can be huge, `read` also has to return them in a form the model can use: a window of lines, never a 200 MB log poured into the context window.
 
@@ -234,7 +243,7 @@ Copy `course-tests/day-10/`. It covers:
 
 ### 10.5 Try to escape — Core
 
-Tests prove the jail works. Trying to escape it yourself is how you come to trust it. In a scratch workspace, try both kinds of link from a script:
+Tests prove the jail works, but I'd still try to escape it yourself: that's how you come to trust it. In a scratch workspace, try both kinds of link from a script:
 1. `ln -s ~ home`, then `createReadTool({ root }).execute({ path: 'home/.bashrc' })` (or `.zshrc`): refused.
 2. `ln -s /tmp/outside-$$.txt planted.md`, a link to a file that doesn't exist, then `createWriteTool({ root }).execute({ path: 'planted.md', content: 'x' })`: refused, and the file outside was never created.
 
@@ -268,7 +277,7 @@ Add an option to prefix each line with its number (`   12│ code`). Models edit
 
 ## Check
 
-The harness can now read and write your files, and only your project's files. The jail checks every path twice: once as text, so `..` can't climb out, and once against the file system, so a symlink can't lead out either, even one whose target doesn't exist yet. `read` hands the model a window of lines with a note about the rest, and `write` says whether it created or overwrote. You also know, and have written down, what the jail can't stop.
+The harness can read and write your files, and nothing outside your project. The jail checks every path twice: once as text, so `..` can't climb out, and once against the file system, so a symlink can't lead out either, even one whose target doesn't exist yet. `read` hands the model a window of lines with a note about the rest, and `write` says whether it created or overwrote. You also know, and have written down, what the jail can't stop.
 
 Tomorrow brings the most powerful tool and the hardest to contain. [Day 11](day-11.md)'s `bash` can run anything, so it comes with a threat model, along with `edit` for changing part of a file.
 

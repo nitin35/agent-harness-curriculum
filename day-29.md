@@ -1,6 +1,6 @@
 # Day 29 — Evals: Measuring What Your Agent Can Actually Do
 
-**Phase:** Week 5 — Product & proof
+**Phase:** Week 5 — Product & proof · **Size:** one sitting
 
 ## By tonight
 
@@ -21,13 +21,13 @@ You'll have an eval runner with real tasks, real checkers, multiple trials, hone
 
 ## Why it matters
 
-Yesterday's integration suite proved that the whole pipeline works together. Every one of those tests uses a scripted model, so they always give the same answer, and that's what makes them tests. They tell you nothing about how well a real model does inside your harness. Today measures that.
-
 "It worked when I tried it" is an anecdote. Agents are **non-deterministic**: the same prompt passes on Monday and fails on Tuesday. Evals turn "seems fine" into numbers you can compare across models, prompts and harness changes, and the right numbers tell you different things. Look at `quote-line` above:
 - it **can** do it: one of three attempts usually works (pass@3 = 100%);
 - you **can't rely** on it: all three working is unlikely (pass^3 = 0%).
 
 For an agent you leave alone, reliability is what matters.
+
+Day 28's integration suite proved that the whole pipeline works together. Every one of those tests uses a scripted model, so they always give the same answer, and that's what makes them tests. They tell you nothing about how well a real model does inside your harness. Today measures that.
 
 ## Concepts
 
@@ -118,7 +118,7 @@ Whatever the numbers say, they only mean something if you report them honestly.
 
 ### 5. Honest tables
 
-Record the run date, model tag, Ollama version, number of trials, and **every** run, failures included. A rerun of the table above on 2026-10-03 (Ollama 0.35.1) resisted the injection **2 of 3** times instead of 0 of 3; its transcripts show two plain summaries and one `touch INJECTED`. Tempting to call that progress; with 3 trials and a different Ollama version, you can't. Keep both tables, dated, and let the next run with more trials decide. Re-running until green and reporting that is how eval tables start lying. Save every trial as JSON (prompt, result, reason, timing, **transcript**). When a number moves, read the transcripts before you believe it.
+Record the run date, model tag, Ollama version, number of trials, and **every** run, failures included. A rerun of the table above on 2026-10-03 (Ollama 0.35.1) resisted the injection **2 of 3** times instead of 0 of 3; its transcripts show two plain summaries and one `touch INJECTED`. Tempting to call that progress; with 3 trials and a different Ollama version, you can't. This is the habit I'd most like you to keep after the course: keep both tables, dated, and let the next run with more trials decide. Re-running until green and reporting that is how eval tables start lying. Save every trial as JSON (prompt, result, reason, timing, **transcript**). When a number moves, read the transcripts before you believe it.
 
 Here is what a saved trial looks like. The runner writes one JSON object per line (the JSON Lines format), with these fields: `task`, `pass`, `reason`, `ms`, `stdout`, `stderr`, `transcript`, `trial`, `kind`, `live` and `model`. That rerun's first `quote-line` trial failed with the reason `line 3 not quoted exactly`. Its `stdout` shows why:
 
@@ -193,7 +193,7 @@ Add a task that exercises *your* favourite feature: resume (two runs, the second
 
 ## Check
 
-You can now measure your agent instead of trusting a demo. An eval is a task in a fresh copy of a fixture, with a checker that looks at results and computes the right answer itself, and a safety checker that a do-nothing model can't pass. Scripted mode replays ideal tool calls and must be 100%, so it guards the harness. Live mode measures the model through the harness, many trials at a time. pass@k says whether the model *can*, pass^k whether you can *rely* on it, and both come from a product, never from factorials. Every trial is saved with its transcript, and a number only goes in the table after you've read why it is what it is.
+A demo is no longer your only evidence: you can measure your agent. An eval is a task in a fresh copy of a fixture, with a checker that looks at results and computes the right answer itself, and a safety checker that a do-nothing model can't pass. Scripted mode replays ideal tool calls and must be 100%, so it guards the harness. Live mode measures the model through the harness, many trials at a time. pass@k says whether the model *can*, pass^k whether you can *rely* on it, and both come from a product, never from factorials. Every trial is saved with its transcript, and a number only goes in the table after you've read why it is what it is.
 
 Tomorrow, [Day 30](day-30.md) is the last day: you ship the harness.
 

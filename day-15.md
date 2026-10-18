@@ -1,6 +1,6 @@
 # Day 15 — Talk to Your Harness: `PromptUI` + `UIBridge` ⚠ heavier day
 
-**Phase:** Week 3 — Interactive harness
+**Phase:** Week 3 — Interactive harness · **Size:** two sittings
 
 ## By tonight
 
@@ -22,7 +22,7 @@ What you can't see in a transcript matters as much. Ctrl+C stops a run without k
 
 ## Why it matters
 
-Yesterday the loop's events got one vocabulary, a bus to carry them and a printer to show them. The trace script printed every event of a run, but you still drove the engine from a script: one question, one run, then the program ended.
+Day 14 gave the loop's events one vocabulary, a bus to carry them and a printer to show them. The trace script printed every event of a run, but you still drove the engine from a script: one question, one run, then the program ended.
 
 A person at a keyboard doesn't work that way, and the difference is all about timing. You ask a question and the model starts a slow `bash` command. While you wait, you think of a follow-up and type it. With a script there was nobody to type, but now that line arrives in the middle of a run, and something has to decide what it means. Then the approval question appears, and you answer `y`, but if two parts of the program are reading the keyboard, your `y` can also go to the model as a message. Then you change your mind and press Ctrl+C: does that stop the run, or the whole program, and what happens to the follow-up you typed? And when Ollama goes away mid-run, does the prompt come back, or is the terminal left looking alive while it ignores you?
 
@@ -228,7 +228,7 @@ What the model remembers is what the bridge keeps. The bridge keeps `history` an
 
 The note after an abort is there because, without it, the model sees an unfinished task, and it can pick that task up again on your next message, whatever you asked. Claude Code adds the same words. Stretch 15.7 measures how much the note helps.
 
-Keeping a failed run matters for a similar reason. Say `write` created a file and then Ollama went away. If history drops that run, the model believes nothing happened, and next time it may write the file again or tell you it doesn't exist. One small change to the loop fixes it: `run()` catches, sets `err.newMessages`, and rethrows. Wherever it can throw, those messages are whole units (the user message, then complete tool pairs), so the [tool-pair invariant](README.md#tool-pair-history-invariant) still holds.
+Keeping a failed run matters for a similar reason. Say `write` created a file and then Ollama went away. If history drops that run, the model believes nothing happened, and next time it may write the file again or tell you it doesn't exist. One small change to the loop fixes it: `run()` catches, sets `err.newMessages`, and rethrows. Wherever it can throw, those messages are whole units (the user message, then complete tool pairs), so the [tool-pair invariant](reference.md#tool-pair-history-invariant) still holds.
 
 With the reference harness, a run whose `write` succeeded before the provider failed shows:
 
@@ -367,6 +367,8 @@ The note helps, but by less than the first batch suggested. 4/8 against 1/8 look
 ## Check
 
 You now have a harness you can talk to. One component owns the keyboard, so an approval answer never leaks into the conversation. The bridge holds the only state that timing depends on, busy and its queue, so a line typed mid-run waits its turn. Ctrl+C stops the work before it stops the session, and every run, whether it answered, was aborted or failed, ends through one teardown that brings the prompt back exactly once and keeps an honest record in history. You've also seen why any of this is needed: an `await` pauses only the function it's in, so the keyboard stays live for the whole run.
+
+This is the day the course has been heading for since the toy: a conversation with a program you wrote, from the keyboard all the way down to the model. I'd stop and enjoy that for a minute before you read on.
 
 Tomorrow, [Day 16](day-16.md) makes the answer arrive as it's written, token by token, through the `text_delta` subscription you've already wired, and reaches Checkpoint 2.
 

@@ -1,25 +1,27 @@
-# Day 11 — `bash`, `edit` and the Threat Model ⚠
+# Day 11 — `bash`, `edit` and the Threat Model ⚠ heavier day
 
-**Phase:** Week 2 — Provider & tools
+**Phase:** Week 2 — Provider & tools · **Size:** two sittings
 
 ## By tonight
 
-```js
-await bash.execute({ command: 'npm test' }, { signal });
-// → { isError: true, content: '…\n[stderr]\n1 failing\n[exit code 1]', details: { exitCode: 1 } }
-await bash.execute({ command: 'sleep 30 & echo $! > pid; wait', timeout: 500 }, {});
-// → returns in ~0.5 s, and the sleeping grandchild is dead too
-await bash.execute({ command: 'npm run dev &' }, {});
-// → returns promptly: '[NOTE: the background processes this command started … have been KILLED …]'
-await edit.execute({ path: 'src/a.js', oldString: 'const b = 2;', newString: 'const b = 20;' }, {});
-// → Edited src/a.js.\n--- a/src/a.js\n+++ b/src/a.js\n@@ -2,1 +2,1 @@\n-const b = 2;\n+const b = 20;
+```
+$ node toy/main.mjs
+you> Run sleep 25 & echo started with bash.
+agent> The user wants me to run two commands using the bash tool: …     ← thinking, dimmed
+  run `sleep 25 & echo started`? [y/N] y
+Done! I've started the `sleep 25` background process and printed "started". Since you're using the
+bash tool directly, the background process will be killed after the command finishes executing. …
+$ pgrep sleep
+$                                                                       ← nothing left running
 ```
 
-Four calls, four guarantees. A failing command comes back as a result the model can read, a timeout kills the whole family of processes and not just the shell, a background server is stopped instead of left running, and an edit changes exactly one place and shows the diff. Your toy agent now runs commands through this tool, and you have a one-page **threat model** that says honestly what your guardrails stop and what they don't.
+That's your week 1 toy with real hands: the same `you>` prompt and the same `[y/N]` question, but the command now runs through today's `bash` tool. It started a background `sleep` and returned at once. In your own terminal that `sleep` would keep running for 25 seconds. Here it's killed half a second after the shell exits, because nothing a command starts may outlive the call. The tool said so in the first line of its result, so the model's answer gets it right, and `pgrep` finds nothing.
+
+Behind that run are four guarantees. A failing command comes back as a result the model can read, a timeout kills the whole family of processes and not just the shell, a background server is stopped instead of left running, and an `edit` changes exactly one place and shows the diff. You also write a one-page **threat model** that says honestly what your guardrails stop and what they don't.
 
 ## Why it matters
 
-Yesterday's tools could only touch files, and the jail kept them inside your project. Today's main tool can do anything you can do from a terminal, and no jail can look inside a shell command.
+Day 10's tools could only touch files, and the jail kept them inside your project. Today's main tool can do anything you can do from a terminal, and no jail can look inside a shell command.
 
 `bash` is the most powerful and most dangerous tool a harness has. It needs:
 - a timeout the model can't switch off;
@@ -100,7 +102,7 @@ console.log(`the group:  sh alive? ${alive(b.pid)}, sleep alive? ${alive(sleepB)
 
 ### 3. Nothing a command starts outlives the call
 
-Here is the pattern in practice. On POSIX, give each command its own **process group** and signal the whole group:
+If anything in this course deserves a second read, I think it's this concept: each of its details closes a gap you'd otherwise notice only hours later, when a server you'd forgotten is still holding a port. Here is the pattern in practice. On POSIX, give each command its own **process group** and signal the whole group:
 
 ```js
 // a new process group, led by the child

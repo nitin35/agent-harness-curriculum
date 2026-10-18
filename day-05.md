@@ -1,6 +1,6 @@
-# Day 5 — Errors, Validation and Tests
+# Day 5 — Errors, Validation and Tests ⚠ heavier day
 
-**Phase:** Week 1 — Hello, agent
+**Phase:** Week 1 — Hello, agent · **Size:** two sittings
 
 ## By tonight
 
@@ -30,6 +30,8 @@ In four days the toy has learned to act, to stop when asked, and to stream its a
 An agent fails constantly. The server is down, a file is missing, the model sends broken JSON, the user mistypes a flag. Some of those failures are **bugs** in your code, and the right response is to find out loudly and fix them. Others are **expected**: they happen to correct programs, and they should flow back to the model or the user as information they can act on. A harness that confuses the two either crashes over a missing file or quietly hides its own bugs. Telling them apart is the first half of today.
 
 The second half is proving that things work. So far you've run the course's tests. Today you write your own, including tests for the toy's client that run with no network at all. Tests that run in a second, on any machine, are what separate a harness you can trust from a demo that worked once. And the modules you write today, the error classes and the command-line parser, come with you into the real harness next week.
+
+If you've written exception classes and unit tests in Python or C++, concepts 2 and 4 will feel familiar. Read their code, slow down at the traps (`super` before `this`, a `return` inside `finally`, the missing `await` in a test), and skim the rest.
 
 ## Concepts
 
@@ -546,7 +548,7 @@ The day's course tests include `day05-toy-client.test.js`, which uses the same s
 
 ### 5.5 `src/cli/args-parser.js` — Core
 
-The harness's real CLI parser, written by hand. Node has a built-in one, `util.parseArgs`, but writing your own once teaches you exactly what the conventions in concept 6 mean, and it gives you a module whose every decision is yours and pinned by a test. Its API:
+The harness's real CLI parser, written by hand. Node has a built-in one, `util.parseArgs`, and I'd still write your own once: it teaches you exactly what the conventions in concept 6 mean, and it gives you a module whose every decision is yours and pinned by a test. Its API:
 
 ```js
 /**
@@ -651,7 +653,7 @@ Fix what it finds. Expect things like an `unknown` value used without checking i
 
 ## Check
 
-That's the end of week one. The toy acts, stops when asked, streams, and now fails well: bugs crash loudly where they happen, while the world's failures come back as messages someone can act on. You can also prove it. You have tests of your own, a client tested with no network, and a habit of checking what was sent as well as what came back. The error classes and the parser are the first pieces of the real harness that you'll keep using every day from here on.
+That's the last of week one's language days. The toy acts, stops when asked, streams, and now fails well: bugs crash loudly where they happen, while the world's failures come back as messages someone can act on. You can also prove it. You have tests of your own, a client tested with no network, and a habit of checking what was sent as well as what came back. The error classes and the parser are the first pieces of the real harness that you'll keep using every day from here on.
 
 Tomorrow you stop building for a day and read. [Day 6](day-06.md) walks through Pi, a serious open-source harness, and you write down the design of your own before you start building it on Day 7.
 

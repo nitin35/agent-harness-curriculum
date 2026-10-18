@@ -1,6 +1,6 @@
 # Day 17 — Sessions on Disk
 
-**Phase:** Week 3 — Interactive harness
+**Phase:** Week 3 — Interactive harness · **Size:** one sitting
 
 ## By tonight
 
@@ -19,9 +19,9 @@ Every run is written to disk when it ends, one line per message, even a run that
 
 ## Why it matters
 
-Yesterday's Checkpoint 2 left you with a harness that streams, handles tools and Ctrl+C, and remembers the conversation. But it remembers in memory only, in the bridge's `history` array. Quit, close the terminal or crash, and the conversation is gone. A harness that forgets everything on Ctrl+C is a toy.
+Picture an hour-long session that ends in a crash, and a file that now opens to a conversation with everything before the crash missing. Nothing threw an error; the file was simply left in a state the code didn't expect. That's the hard part of today, and it isn't writing a file. It's writing one that's still usable after the program dies at the worst moment, halfway through a line, or between two writes that belonged together.
 
-Today you build the storage, and the hard part isn't writing a file. It's writing one that's still usable after the program dies at the worst moment, halfway through a line, or between two writes that belonged together. Picture an hour-long session that ends in a crash, and a file that now opens to a conversation with everything before the crash missing. Nothing threw an error; the file was simply left in a state the code didn't expect. Today's design makes each of those states either impossible or harmless.
+Yesterday's Checkpoint 2 left you with a harness that streams, handles tools and Ctrl+C, and remembers the conversation. But it remembers in memory only, in the bridge's `history` array. Quit, close the terminal or crash, and the conversation is gone, and a harness that forgets everything on Ctrl+C is a toy. Today you build the storage, and its design makes each of those bad states either impossible or harmless.
 
 Tomorrow's commands and Day 19's `/resume` are built on this storage, and on Day 25 compaction uses its tree structure to shrink long chats without losing anything from the file.
 
@@ -80,7 +80,7 @@ The chain of parents has a weakness, though: one missing link and the walk back 
 
 ### 4. Crash safety
 
-Appends survive crashes, mostly. Appends are one `fs.appendFile` per line. A crash can tear at most the last line, and `readJsonl` **skips a corrupt line with a warning** instead of failing the whole session.
+If you slow down anywhere today, I'd make it here. Appends survive crashes, mostly. Appends are one `fs.appendFile` per line. A crash can tear at most the last line, and `readJsonl` **skips a corrupt line with a warning** instead of failing the whole session.
 
 The "mostly" is about what happens next. **A torn line has no `\n`.** Reopen that file and append, and the new record is glued onto the torn one, so it is skipped too. Worse, the record after it points at a parent that no longer exists, and `getPath()` stops there: **the model loses everything before the crash**. So `readJsonl` also reports `tornTail` (the file doesn't end in `\n`), and the first append after `open()` writes a `\n` first. `open()` also warns when an entry's parent is missing: a corrupt line in the *middle* cuts the chain, and it shouldn't do that silently.
 

@@ -1,6 +1,6 @@
 # Day 20 — The Approval Gate and Permission Rules ⚠ heavier day
 
-**Phase:** Week 4 — Power & context
+**Phase:** Week 4 — Power & context · **Size:** two sittings
 
 ## By tonight
 
@@ -24,9 +24,9 @@ The approval question has a third answer now. The first `npm test` is answered `
 
 ## Why it matters
 
-Yesterday the harness learned to resume a conversation. Since Day 12 every risky tool call has asked you first, and since Day 15 the question has come through the UI. That's safe, and in a long session it's exhausting.
+Picture the twentieth approval question of an afternoon, after nineteen harmless `npm test`s and `git status`es. The twentieth looks the same at a glance, and you answer it the same way, without reading it. That is exactly how harnesses get people hurt.
 
-A y/N prompt on every command is safe but tiring, and tired people press `y` without reading. Picture the twentieth question of an afternoon, after nineteen harmless `npm test`s and `git status`es. The twentieth looks the same at a glance, and you answer it the same way. That is exactly how harnesses get people hurt. Real harnesses (Claude Code, Codex CLI, Gemini CLI) all combine three things:
+Since Day 12 every risky tool call has asked you first, and since Day 15 the question has come through the UI. That's safe, and in a long session it's exhausting, and tired people press `y` without reading. Real harnesses (Claude Code, Codex CLI, Gemini CLI) all combine three things:
 - **rules** that pre-approve the boring, safe things and block the dangerous ones;
 - **modes** for different levels of trust;
 - a **prompt** for everything in between.
@@ -234,7 +234,7 @@ await new Promise((resolve) => setTimeout(resolve, 60));
 
 Follow the times. All three questions are asked at once, and nothing blocks while they wait: each `ask` returns a pending promise straight away. At 10 ms t1's answer arrives, finds t1's `finish` in the map, and settles it. At 20 ms the abort settles t3. At 50 ms t2's timer fires, and t2 settles as unanswered. When t2's real answer turns up at 80 ms, `finish` has already deleted t2 from the map, so the answer finds nobody and changes nothing.
 
-You might wonder why `finish` needs its `settled` flag, since a promise can only settle once anyway (Day 3): a second `resolve` call is ignored. The flag isn't there for `resolve`. It's there for everything else `finish` does: clearing the timer, removing the abort listener, deleting the map entry and, in the gate, the announcement below must each happen once. The cleanup does remove the other exits (no timer can fire after an answer, because the answer cleared it), but four callers share `finish`, and one check at its top makes "exactly once" true by construction instead of relying on every other exit having been removed in time.
+You might wonder why `finish` needs its `settled` flag, since a promise can only settle once anyway (Day 3): a second `resolve` call is ignored. The flag isn't there for `resolve`. It's there for everything else `finish` does. Clearing the timer, removing the abort listener, deleting the map entry and, in the gate, the announcement below must each happen exactly once. In practice the cleanup removes the other exits: an answer clears the timer, so the timer can't fire afterwards. But four different callers share `finish`, and one check at its top guarantees "exactly once" by itself, without depending on every other exit having been removed in time.
 
 On timeout and abort, the gate itself emits `tool_approval_result { approved: false }`, so the UI closes its open question. `finally`-style cleanup removes the map entry, the timer and the abort listener. The order inside the gate's `finish` matters here: it deletes the map entry *before* it announces, because the announcement goes through the bus to every listener, the gate's own included. By then there's nothing left for the gate to find.
 
@@ -256,7 +256,7 @@ One answer the UI can give is more than a yes, and it needs a careful definition
 
 Note the rule for `bash` has no `*`. "Always" for `npm test` doesn't quietly become "always for anything starting with `npm test`".
 
-The reason for all this narrowness is that you're approving what you see. When you answer `a` to `npm test`, you've read `npm test`, and that's all the rule should ever let through. This is the principle of least privilege: grant exactly what was asked for, and nothing it might be stretched to cover.
+I'd defend this narrowness even when it feels fussy, because you're approving what you see. When you answer `a` to `npm test`, you've read `npm test`, and that's all the rule should ever let through. This is the principle of least privilege: grant exactly what was asked for, and nothing it might be stretched to cover.
 
 The last case is the one with nobody to see anything.
 
@@ -339,7 +339,7 @@ Add a `network: false` setting that makes the policy deny any `bash` command con
 
 ## Check
 
-The harness now decides most approvals itself, and asks you only about what's left. A policy runs in a fixed order, deny rules first, so nothing can overrule a refusal. Rules match whole, anchored arguments, wildcard allow rules refuse chained commands, and paths are normalized before matching. Modes set the default for everything else. When a human is needed, the gate asks over the bus with a stored resolver per id, and every question ends exactly once, by answer, timeout, abort or "nobody can answer", always failing closed. "Always" grants exactly the call you saw, for this session only.
+Most approvals no longer need you: a policy decides them, and the harness asks you only about what's left. The policy runs in a fixed order, deny rules first, so nothing can overrule a refusal. Rules match whole, anchored arguments, wildcard allow rules refuse chained commands, and paths are normalized before matching. Modes set the default for everything else. When a human is needed, the gate asks over the bus with a stored resolver per id, and every question ends exactly once, by answer, timeout, abort or "nobody can answer", always failing closed. "Always" grants exactly the call you saw, for this session only.
 
 Tomorrow, [Day 21](day-21.md) tests the seam you've relied on since Day 8 by adding a second provider. It also brings the hard case of streamed tool calls that Day 16's assembler was built for: arguments cut into JSON fragments.
 

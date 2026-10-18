@@ -1,6 +1,6 @@
-# Day 26 — The CLI, Secure Settings, Logging and Packaging
+# Day 26 — The CLI, Secure Settings, Logging and Packaging ⚠ heavier day
 
-**Phase:** Week 5 — Product & proof
+**Phase:** Week 5 — Product & proof · **Size:** two sittings
 
 ## By tonight
 
@@ -78,7 +78,7 @@ tools.enabled             // → ['read']                        intersection: '
 compaction.contextLimit   // → 8192                            lower: the project's 16384 is ignored
 ```
 
-Everything else is ignored, with a warning that names the key: `autoApprove`, `ollamaUrl`, `openai.*`, `provider`, `permissions.allow`, `mcpServers`, `systemPrompt`. An allow-list beats a deny-list because new settings default to *not allowed*. A key added to the harness next month is refused in project files until someone decides it's safe there. With a deny-list, it would be accepted until someone remembers to block it. The warnings look like this (each is one line, wrapped here; the path is the project's real one):
+Everything else is ignored, with a warning that names the key: `autoApprove`, `ollamaUrl`, `openai.*`, `provider`, `permissions.allow`, `mcpServers`, `systemPrompt`. If you take one design habit from today, I'd take this one: an allow-list for anything a stranger can write. It beats a deny-list because new settings default to *not allowed*. A key added to the harness next month is refused in project files until someone decides it's safe there. With a deny-list, it would be accepted until someone remembers to block it. The warnings look like this (each is one line, wrapped here; the path is the project's real one):
 
 ```
 …/.agent-harness/settings.json: 'autoApprove' cannot be set by a project file (security) — ignored;
@@ -381,6 +381,8 @@ Commit `day-26: CLI, settings, logging, packaging`.
 ## Check
 
 The harness is now a command you can install and hand to someone else. Its settings come in four layers, and the one layer a stranger controls, the project's, can only set harmless preferences or tighten yours, with every refused key named. Logs go to a file, synchronously, and never to stdout. Errors speak in three voices, depending on who has to act, and every fatal path restores the terminal and lets stdout drain. And `-p` gives scripts one answer on stdout with an exit code they can trust, failing closed when nobody can approve a tool.
+
+Run `agent-harness --version` from any folder once more, and look at it for a second. That's your program, on your PATH like any other command you use, and on Day 1 it was 70 lines in one file.
 
 Tomorrow, [Day 27](day-27.md) attacks all of it. It's red-team day: you assume the model has been turned against you by text it read, and check whether the harness's limits on what can run, where and with whose approval still hold.
 

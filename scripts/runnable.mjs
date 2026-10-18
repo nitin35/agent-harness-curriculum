@@ -23,7 +23,7 @@ const verbose = process.argv.includes('--verbose');
 
 /** Every fenced block in the course pages: { file, line, info, code }. */
 function blocks() {
-  const pages = fs.readdirSync(ROOT).filter((f) => /^(day-\d+|buffer-\d+|README|self-check-answers)\.md$/.test(f)).sort();
+  const pages = fs.readdirSync(ROOT).filter((f) => /^(day-\d+|buffer-\d+|README|reference|self-check-answers)\.md$/.test(f)).sort();
   const out = [];
   for (const file of pages) {
     const lines = fs.readFileSync(path.join(ROOT, file), 'utf8').split('\n');
