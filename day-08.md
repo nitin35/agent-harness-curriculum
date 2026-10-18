@@ -368,7 +368,7 @@ Add an optional `retries` option: retry `unreachable` and HTTP 5xx server faults
 
 The harness can now talk to a model. The provider translates in both directions in pure functions you can test with plain data, and it sends the settings that stop Ollama from quietly cutting a prompt or generating forever. It knows the window it will really get, and it turns every way the network and the server fail into an error that says what to do, while letting an abort pass through untouched. From here on, nothing else in the harness needs to know that Ollama exists.
 
-Tomorrow's subject is the other side of a tool call. Day 9 fixes the rules every tool follows, what it declares and what it returns, and builds the registry that holds them.
+Tomorrow's subject is the other side of a tool call. [Day 9](day-09.md) fixes the rules every tool follows, what it declares and what it returns, and builds the registry that holds them.
 
 Before you move on, check:
 

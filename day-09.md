@@ -287,7 +287,7 @@ Register `read` and `bash` together and ask "Show me what's in notes.txt" ten ti
 
 Every tool in the harness now follows one contract, and every failure, from a missing entry to arguments that make no sense, comes back to the model as a result it can act on. Arguments are checked against the tool's schema, with errors written for the model to read. The registry stores tools safely by name and sends the model only plain JSON. And you have numbers, not a hunch, for how much a description matters.
 
-Tomorrow you build the first real tools on this contract. Day 10's `read` and `write` touch your actual files, so they start with a jail that keeps them inside the workspace.
+Tomorrow you build the first real tools on this contract. [Day 10](day-10.md)'s `read` and `write` touch your actual files, so they start with a jail that keeps them inside the workspace.
 
 Before you move on, check:
 

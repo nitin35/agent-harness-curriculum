@@ -266,7 +266,7 @@ Add an option to prefix each line with its number (`   12│ code`). Models edit
 
 The harness can now read and write your files, and only your project's files. The jail checks every path twice: once as text, so `..` can't climb out, and once against the file system, so a symlink can't lead out either, even one whose target doesn't exist yet. `read` hands the model a window of lines with a note about the rest, and `write` says whether it created or overwrote. You also know, and have written down, what the jail can't stop.
 
-Tomorrow brings the most powerful tool and the hardest to contain. Day 11's `bash` can run anything, so it comes with a threat model, along with `edit` for changing part of a file.
+Tomorrow brings the most powerful tool and the hardest to contain. [Day 11](day-11.md)'s `bash` can run anything, so it comes with a threat model, along with `edit` for changing part of a file.
 
 Before you move on, check:
 

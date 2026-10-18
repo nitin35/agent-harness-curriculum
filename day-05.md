@@ -649,7 +649,7 @@ Fix what it finds. Expect things like an `unknown` value used without checking i
 
 That's the end of week one. The toy acts, stops when asked, streams, and now fails well: bugs crash loudly where they happen, while the world's failures come back as messages someone can act on. You can also prove it. You have tests of your own, a client tested with no network, and a habit of checking what was sent as well as what came back. The error classes and the parser are the first pieces of the real harness that you'll keep using every day from here on.
 
-Tomorrow you stop building for a day and read. Day 6 walks through Pi, a serious open-source harness, and you write down the design of your own before you start on it in Day 7.
+Tomorrow you stop building for a day and read. [Day 6](day-06.md) walks through Pi, a serious open-source harness, and you write down the design of your own before you start building it on Day 7.
 
 Before you move on, check:
 

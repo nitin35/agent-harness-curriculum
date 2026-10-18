@@ -710,7 +710,7 @@ Time three sequential `await delay(100)` calls against `Promise.all` of three (a
 
 You can now stop an agent without losing it. Underneath that is a model of JavaScript you'll use every day from here on. One thread runs your code, and callbacks wait in queues until it's free. A promise's callbacks always run later, as microtasks. `await` cuts a function in two. And cancelling is a request that the work has to listen for. The toy puts all of that into one signal per question, handed to every piece of work, and a loop that answers every tool call even when the run is cut short.
 
-Tomorrow tackles the other thing you noticed on Day 1: the long wait before anything appears. Day 4 makes the toy stream its answer as the model writes it, which means handling bytes that arrive in pieces.
+Tomorrow tackles the other thing you noticed on Day 1: the long wait before anything appears. [Day 4](day-04.md) makes the toy stream its answer as the model writes it, which means handling bytes that arrive in pieces.
 
 Before you move on, check:
 

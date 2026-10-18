@@ -399,7 +399,7 @@ Day 21 builds a provider for this dialect.
 
 You now know Ollama's dialect from evidence rather than from documentation. You know where the text, the thinking and the tool calls live, that `done_reason` says `stop` even after a tool call, and that a prompt too big for the window is cut without a word. Against that, you've fixed the harness's own vocabulary as types, which every module from here on will import.
 
-Tomorrow you write the translator between the two. Day 8's `OllamaProvider` is the only code in the harness that knows Ollama's field names, and it's tested against captures like the ones you made today.
+Tomorrow you write the translator between the two. [Day 8](day-08.md)'s `OllamaProvider` is the only code in the harness that knows Ollama's field names, and it's tested against captures like the ones you made today.
 
 Before you move on, check:
 

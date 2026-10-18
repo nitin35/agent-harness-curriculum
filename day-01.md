@@ -263,7 +263,7 @@ List what a real harness needs that the toy lacks: for example streaming, abort,
 
 ## Check
 
-That's a working agent, and you've already seen the whole shape of a harness. There's a list of tools the model can ask for, a loop that runs them and reports back, and a person (you, for now) who decides what's allowed. You've also seen its limits, and they set the agenda for the weeks ahead. First, though, Day 2 takes this same program apart into small modules, and uses it to teach the parts of JavaScript that most often surprise C++ and Python programmers.
+That's a working agent, and you've already seen the whole shape of a harness. There's a list of tools the model can ask for, a loop that runs them and reports back, and a person (you, for now) who decides what's allowed. You've also seen its limits, and they set the agenda for the weeks ahead. First, though, [Day 2](day-02.md) takes this same program apart into small modules, and uses it to teach the parts of JavaScript that most often surprise C++ and Python programmers.
 
 Before you move on, check:
 

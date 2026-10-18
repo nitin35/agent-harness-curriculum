@@ -285,7 +285,7 @@ Give the provider a per-request deadline: `AbortSignal.any([opts.signal, AbortSi
 
 That's Checkpoint 1: a working engine. One signal reaches the model call, every tool and the gaps between them, and an abort comes back as a result, with the tool pairs still whole and no process left behind. A real failure still throws, so someone sees it. `ScriptedProvider` can play any model, slow or broken, so the whole engine is proven with Ollama switched off, and every later day builds its tests on it.
 
-Next comes [Buffer 1](buffer-1.md), a day to catch up, repair or go further, and then Day 14 starts week 3 by connecting the engine to a real interface through events.
+Next comes [Buffer 1](buffer-1.md), a day to catch up, repair or go further, and then [Day 14](day-14.md) starts week 3 by connecting the engine to a real interface through events.
 
 Before you move on, check:
 

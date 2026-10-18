@@ -851,7 +851,7 @@ In a file, `Object.freeze` a message and try to change `msg.content` (an ES modu
 
 ## Check
 
-The agent does exactly what it did yesterday, and that was the point. What changed is its shape. The loop now says what it needs and lets its caller supply it, so it can be driven by a test as easily as by a person. You also have the JavaScript to read everything that follows: values and their traps, closures and `this`, copying instead of changing, modules, types in comments, and the first rules of `await`. Tomorrow takes those rules much further. Day 3 explains how JavaScript waits without blocking, and uses that to make Ctrl+C stop the work without stopping the program.
+The agent does exactly what it did yesterday, and that was the point. What changed is its shape. The loop now says what it needs and lets its caller supply it, so it can be driven by a test as easily as by a person. You also have the JavaScript to read everything that follows: values and their traps, closures and `this`, copying instead of changing, modules, types in comments, and the first rules of `await`. Tomorrow takes those rules much further. [Day 3](day-03.md) explains how JavaScript waits without blocking, and uses that to make Ctrl+C stop the work without stopping the program.
 
 Before you move on, check:
 

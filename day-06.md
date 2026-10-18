@@ -430,7 +430,7 @@ Read Pi's `bash.ts` past the top. How does it handle output size, timeouts and t
 
 You've read a real harness the way professionals read code, from its types inward, and you know where yours will follow it and where it won't. Above all, you've chosen a bus that never waits on its listeners, and an approval gate built into the core. You have a design on paper, and its most important rule, the order of the loop's events, is a test that any loop can be run against.
 
-Tomorrow the real harness begins. Day 7 starts at the bottom, with the exact shapes of the messages that travel between your code and the model.
+Tomorrow the real harness begins. [Day 7](day-07.md) starts at the bottom, with the exact shapes of the messages that travel between your code and the model.
 
 Before you move on, check:
 

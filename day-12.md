@@ -324,7 +324,7 @@ Then name a tool for which parallel execution would be safe and worth it (severa
 
 The parts are now one engine. The loop asks the registry for tools on every turn, answers every tool call in order, turns every mistake into a result the model can read, stops a model that won't stop, and refuses risky tools unless someone says yes. It does that with no approver at all, too. Its state lives in locals, so one run can't corrupt another, and every exit ends with exactly one `agent_end`.
 
-Tomorrow you make it stoppable. Day 13 threads Ctrl+C through the whole loop, as Day 3 did for the toy, and builds a fake model that lets every later test run without Ollama. That completes Checkpoint 1.
+Tomorrow you make it stoppable. [Day 13](day-13.md) threads Ctrl+C through the whole loop, as Day 3 did for the toy, and builds a fake model that lets every later test run without Ollama. That completes Checkpoint 1.
 
 Before you move on, check:
 

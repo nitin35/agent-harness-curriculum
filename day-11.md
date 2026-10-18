@@ -335,7 +335,7 @@ Linux: wrap the command in `bwrap --ro-bind / / --bind <root> <root> --unshare-n
 
 The harness has real hands now. `bash` runs a command in its own process group, so a timeout or Ctrl+C stops everything it started, background processes included, and so does the harness exiting. Its output keeps the head and the tail, where the errors are, and its failures are results with exit codes. `edit` changes one exact place and shows the diff. And `notes/tool-security.md` says plainly what all of this does and doesn't protect.
 
-Tomorrow you put the pieces together. Day 12's loop connects the provider, the registry and the tools, asks before running anything that needs approval, and keeps every tool call answered.
+Tomorrow you put the pieces together. [Day 12](day-12.md)'s loop connects the provider, the registry and the tools, asks before running anything that needs approval, and keeps every tool call answered.
 
 Before you move on, check:
 

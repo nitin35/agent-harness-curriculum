@@ -568,7 +568,7 @@ Build a `ReadableStream` with a `pull()` producer that counts what it has made, 
 
 The toy now feels alive. It shows its thinking and its answer as they're written, and a long command can't flood the conversation. Underneath are the three ideas you'll keep using every time bytes arrive from somewhere else. Async generators let you consume values over time with one loop, while the event loop stays free. A streaming decoder turns bytes into text without breaking characters. Framing turns text into messages, keeping a partial line until its end arrives. You've also met your first real harness modules, and the course tests that prove them.
 
-That closes the toy's main features. Day 5 is about what happens when things go wrong: error classes, validating what comes in, and writing tests of your own.
+That closes the toy's main features. [Day 5](day-05.md) is about what happens when things go wrong: error classes, validating what comes in, and writing tests of your own.
 
 Before you move on, check:
 
