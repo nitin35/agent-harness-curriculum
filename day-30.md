@@ -17,9 +17,13 @@ $ git log --oneline | wc -l
 32
 ```
 
+The first command is the demo, and the comment says the point of it: with the network off, it still reads a file, edits it, saves the session and reopens it, because the model is scripted and the harness needs nothing from outside. The second command counts your commits. Thirty-two is about one for each day of the course, Buffers included, and the history they make is your learning log.
+
 A harness someone else can install, read, extend and trust, plus one feature that's *yours*.
 
 ## Why it matters
+
+Previously, on Day 29, you measured the harness with evals and saved every trial. That was the last new subsystem. Today nothing new goes into the engine. The work is making what's there usable by someone who wasn't here for the thirty days: a stranger who clones the repository, runs one command, and decides from what happens whether to keep reading.
 
 Shipping is making every contract visible:
 - a demo that runs anywhere;
@@ -33,7 +37,7 @@ Then you graduate, by building something the course didn't hand you.
 
 ### 1. An offline demo is a library proof
 
-**The demo is the first thing a stranger runs, so it must work on their machine as it is.** No Ollama, no model download, no settings. `examples/demo.js` uses only `src/index.js` (`AgentLoop`, `ScriptedProvider`, `SessionManager`, `createBuiltinTools`, `EventBus`) with a scripted model: two turns, a read, an edit, a save, then a reopen that prints the resumed history. It's the first thing a stranger runs, and it proves your core doesn't secretly depend on Ollama or the terminal UI.
+The demo is the first thing a stranger runs, so it must work on their machine as it is. No Ollama, no model download, no settings. `examples/demo.js` uses only `src/index.js` (`AgentLoop`, `ScriptedProvider`, `SessionManager`, `createBuiltinTools`, `EventBus`) with a scripted model: two turns, a read, an edit, a save, then a reopen that prints the resumed history. Running with no model and no terminal UI proves that your core doesn't secretly depend on either.
 
 The reference demo also imports `ToolRegistry`, and builds everything by hand in about forty lines:
 1. it makes a temp workspace with a `notes.txt`;
@@ -57,16 +61,18 @@ agent> The notes say: Release: October · Owner: Grace ·
   …
 ```
 
-**Three details make it convincing:**
+Three details make it convincing:
 - **The model's answer comes from the file.** The scripted model's second reply is a function of the messages it receives (Day 13), so `The notes say: …` quotes what `read` really returned.
 - **`autoApprove: true` is written out and commented.** It's safe *here*: a throwaway temp folder and a scripted model. That's a choice a reader can see, not a default.
 - **The reopen is a separate `SessionManager.open`.** Eight entries come back from disk, which proves that sessions persist, not only that the loop ran.
 
 A demo that needs `createApp` and a terminal proves less. It shows that your *application* works, not that the pieces are a library someone else can build on.
 
+The demo shows the harness working. The documents explain it to the people who will use it next.
+
 ### 2. Four documents
 
-**Each document has one reader:**
+Each document has one reader:
 
 | File | Contents |
 |---|---|
@@ -80,7 +86,7 @@ A demo that needs `createApp` and a terminal proves less. It shows that your *ap
 - `extending.md` is for extension authors.
 - `api.md` is for programmers who import the library.
 
-**A decision needs its reason.** One row from the reference's key decisions:
+A decision needs its reason. One row from the reference's key decisions:
 
 | Decision | Why |
 |---|---|
@@ -88,7 +94,7 @@ A demo that needs `createApp` and a terminal proves less. It shows that your *ap
 
 Without the "why", the next person sees one extra field in every request and deletes it.
 
-**Docs drift unless something checks them.** The course test checks that every `src/index.js` export is documented and every canonical event is listed. Wherever you can, *generate* rather than hand-copy (for example, `Object.keys(await import('./src/index.js'))`). The same idea makes a short check you can run at any time (*run this in a file*, from the project folder):
+Docs drift unless something checks them. The course test checks that every `src/index.js` export is documented and every canonical event is listed. Wherever you can, *generate* rather than hand-copy (for example, `Object.keys(await import('./src/index.js'))`). The same idea makes a short check you can run at any time (*run this in a file*, from the project folder):
 
 ```js
 import fs from 'node:fs';
@@ -100,6 +106,8 @@ for (const name of Object.keys(await import('./src/index.js'))) {
 ```
 
 On the reference it prints nothing. With the `McpClient` row deleted from `docs/api.md`, it prints `undocumented: McpClient`. The test also refuses event rows named after other systems' events, such as Pi's `message_update`. An extension author who subscribed to one would wait forever.
+
+One of those documents compares your harness with the one you studied on Day 6, and that comparison deserves care.
 
 ### 3. The Pi comparison, honestly
 
@@ -113,9 +121,11 @@ A row of the mapping table, from the reference:
 |---|---|---|
 | `src/mcp/` | none (Pi deliberately ships no MCP) | MCP is now the standard tool bus; we chose to support it |
 
+The comparison looks back. The capstone looks forward.
+
 ### 4. Capstone: choose one (or propose your own)
 
-**The capstone is the first feature nobody specified for you.** Each option takes a gap the course named and closes it:
+The capstone is the first feature nobody specified for you. Each option takes a gap the course named and closes it:
 
 | Capstone | You'll learn | Starting point |
 |---|---|---|
@@ -128,7 +138,7 @@ A row of the mapping table, from the reference:
 
 Write the plan in `notes/capstone.md` first: the goal, how you'll know it works (**an eval or a test**), and what you'll leave out.
 
-**"How you'll know" comes first** for the same reason as Day 29's checkers: it decides what "done" means before you're tempted to call it done. For the sandbox, a good test already exists in spirit. Day 27's canary, read through `bash` with `cat`, must fail inside your sandbox and succeed outside it. "What you'll leave out" keeps the capstone finishable.
+"How you'll know" comes first for the same reason as Day 29's checkers: it decides what "done" means before you're tempted to call it done. For the sandbox, a good test already exists in spirit. Day 27's canary, read through `bash` with `cat`, must fail inside your sandbox and succeed outside it. "What you'll leave out" keeps the capstone finishable.
 
 ## Build
 
@@ -186,6 +196,12 @@ Build your capstone, with its test or eval first. Then write a short post: what 
 
 ## Check
 
+That's the course. On Day 1 you typed a toy agent of about 70 lines. Now you have a harness you understand from the inside: a provider seam with two dialects behind it, tools behind a jail, an approval gate that fails closed, sessions that survive a crash and resume, streaming, compaction that keeps the protocol whole, extensions and MCP servers behind trust boundaries, a red-team suite, and evals that tell you what a model can really do. Today it became something you can hand over, with a demo that runs offline, documents that are checked against the code, and an honest list of what it doesn't protect against.
+
+The capstone is where you stop following and start choosing. The README's [After the Curriculum](README.md#after-the-curriculum) list has more places to go next.
+
+Before you finish, check:
+
 - [ ] `node --test tests/course/day30-*` green (3 tests), and `node --test` green: Days 3–30, plus your own tests
 - [ ] Graduation checklist ticked
 - [ ] `notes/capstone.md` written
@@ -216,12 +232,12 @@ The runs weren't saved before the reopen. `await session.appendMessages(result.n
 
 ## Common mistakes
 
-- An architecture doc describing the Day 6 plan instead of the code you actually wrote.
-- An eval table with numbers you didn't measure.
-- A capstone with no way to tell whether it works.
-- An export list in `docs/api.md` copied by hand and never checked again.
-- A "Known gaps" section that's missing, or too vague to act on.
-- A demo that only runs on your machine, because it reads your settings or your Ollama.
+- An architecture doc describing the Day 6 plan instead of the code you actually wrote. The plan is already written down, and the code drifted from it a little at a time.
+- An eval table with numbers you didn't measure. A remembered or rounded number feels close enough, and nobody can check it.
+- A capstone with no way to tell whether it works. A new feature is exciting to build, and a test for it feels like something to add afterwards.
+- An export list in `docs/api.md` copied by hand and never checked again. It's right on the day you write it, and every later export makes it a little more wrong.
+- A "Known gaps" section that's missing, or too vague to act on. Gaps are uncomfortable to write down, and a vague one feels safer than a precise one.
+- A demo that only runs on your machine, because it reads your settings or your Ollama. On your machine both are always there, so you never see it fail.
 
 ## Self-check
 
