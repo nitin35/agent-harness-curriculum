@@ -2,9 +2,9 @@
 
 **When:** after Day 25 (Checkpoint 3)
 
-Week 4 was the densest: permissions, a second provider, extensions, MCP, context and compaction. Week 5 turns all of it into a product and then attacks it, so it needs everything to be solid.
+Four weeks in, the harness has grown faster than at any point so far. Week 4 was the densest: permissions, a second provider, extensions, MCP, context and compaction, each one leaning on the days before it. Week 5 turns all of it into a product and then attacks it, so it needs everything to be solid. If you're behind, this day keeps that from compounding into Week 5. If you're not, it's a chance to step back and see the whole harness at once.
 
-Start by finding out where you stand. Run `node --test`, the last item of Checkpoint 3 (Day 25.6). Every course test from Days 3–25 runs offline, against scripted models and fake servers, so Ollama doesn't need to be running. In the reference, every one of them passes. Then pick your section: if anything is red, section 1; if everything is green, section 2; if you've already done what section 2 suggests, section 3.
+Start by finding out where you stand, with evidence rather than a feeling. Run `node --test`, the last item of Checkpoint 3 (Day 25.6). Every course test from Days 3–25 runs offline, against scripted models and fake servers, so Ollama doesn't need to be running. In the reference, every one of them passes. Then pick your section: if anything is red, section 1; if everything is green, section 2; if you've already done what section 2 suggests, section 3.
 
 ## 1. Repair first
 
@@ -25,14 +25,16 @@ Some of the quick checks need a word of explanation:
 - **A tool twice, or not at all.** Your registry refuses a second tool with the same name (`a tool named 'x' is already registered`), so "twice" usually means one job under two names, such as your `read` and an MCP server's `mcp__fs__read_file`. Log `registry.getTools().map((t) => t.name)` once after startup. Each name comes from one place: the built-ins (Days 10–11), an extension (Day 22), `load_skill` (Day 24) or an MCP server (Day 23). A missing name points at the place that should have registered it.
 - **History counted twice** is Day 24.4's warning: a measured `promptTokens` already includes the system prompt and the tool schemas, so history is `total − system − tools`.
 
-**How to repair one red test.** Run only that day's tests and read the *first* failure: the `+ actual` and `- expected` lines (Day 5) say what your code returned and what the test wanted. Then open that day's **Stuck?** section. For this week, the usual causes are there:
+To repair one red test, run only that day's tests and read the *first* failure, because later failures are often its consequences. The `+ actual` and `- expected` lines (Day 5) say what your code returned and what the test wanted. Then open that day's **Stuck?** section. For this week, the usual causes are there:
 - the model forgets after a resume: `getHistory` reads an old session object (Day 19);
 - an approval never resolves: one exit path doesn't settle the promise (Day 20);
 - compaction runs on every turn: usage from before the compaction is trusted (Day 25).
 
-**If a day is still red after a real attempt, look at the solution.** A real attempt means you've read the first failure, checked the day's Stuck? section, and tried a fix. Then read the matching file in [`solutions/checkpoint-3/`](solutions/checkpoint-3/), close it, and write yours. Adopting a whole module is allowed if you say so in the commit message.
+If a day is still red after a real attempt, look at the solution. A real attempt means you've read the first failure, checked the day's Stuck? section, and tried a fix. Then read the matching file in [`solutions/checkpoint-3/`](solutions/checkpoint-3/), close it, and write yours. Adopting a whole module is allowed if you say so in the commit message.
 
 ## 2. On track? Consolidate
+
+Everything is green, so the harness works. This section is about seeing it whole: the architecture as it really is, and the threats as they stand after four weeks of new parts.
 
 **Draw your architecture as it actually is.** Update `docs/architecture.md` from your code (not from Day 6's plan): modules, events, the approval flow, the session tree, compaction. Mark everywhere the code disagrees with the plan.
 
@@ -55,6 +57,8 @@ Outdated usually means "written before a later day changed it". Day 11's section
 - 25.7: whether a model-written summary beats the transcript on the BLUEBIRD test.
 
 ## 3. Ahead? Challenges
+
+These go beyond the course. Each one builds only on pieces you already have, so each is also a test of whether you could extend the harness without being told where everything goes.
 
 1. **`/fork`**: branch the session at the *N*th message back and continue from there; `/tree` prints the session tree with `getChildren()`.
 
