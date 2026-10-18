@@ -240,7 +240,7 @@ On timeout and abort, the gate itself emits `tool_approval_result { approved: fa
 
 What the model then reads: a timeout gives `User denied bash (no answer within 120 s)`. Nobody answered, so it counts as the user's "no", like Ctrl+C. A non-interactive refusal is the policy's, so it reads `Denied bash (needs approval but nobody can answer (non-interactive) — use --auto-approve or an allow rule)`.
 
-C programmers: this is a per-id condition variable. Python: one `asyncio.Future` per id. They differ from JavaScript on a second answer, though. Calling `set_result` on a Python future that's already done raises `InvalidStateError`, and a C++ `std::promise` throws `std::future_error` if you set its value twice. A JavaScript `resolve` called twice says nothing at all, so a doubled answer never shows up as an error. That's one more reason the gate's cleanup is guarded by its own flag instead of relying on anything to complain.
+C++ contrast: each entry in the map plays the part of a condition variable, one per id. Python contrast: it's one `asyncio.Future` per id. Both differ from JavaScript on a second answer, though. Calling `set_result` on a Python future that's already done raises `InvalidStateError`, and a C++ `std::promise` throws `std::future_error` if you set its value twice. A JavaScript `resolve` called twice says nothing at all, so a doubled answer never shows up as an error. That's one more reason the gate's cleanup is guarded by its own flag instead of relying on anything to complain.
 
 One answer the UI can give is more than a yes, and it needs a careful definition.
 

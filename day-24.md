@@ -127,7 +127,7 @@ The budget says how much fits. How it's arranged matters too, because a server c
 
 The server can keep work it has already done. Before it writes a word, the model processes every token of the prompt, and the work for each token depends on all the tokens before it. If a new prompt starts with exactly the same tokens as the last one, the server can keep that work and process only what's new at the end. That shared start is the **prefix**. Hosted APIs bill cached tokens cheaper; local servers skip the recomputation.
 
-You saw it on Day 7's capture: the same 302-token prompt took **631 ms** cold and **54 ms** warm. The numbers are in [`course-assets/captures/ollama-0.32/`](course-assets/captures/ollama-0.32/): `chat-tools.json` and `stream-tools.ndjson` both report `"prompt_eval_count": 302`, with a `prompt_eval_duration` of 631280000 and 54412000 nanoseconds.
+Day 7's captures already contain an example, though that day didn't point it out: the same 302-token prompt took **631 ms** cold and **54 ms** warm. The numbers are in [`course-assets/captures/ollama-0.32/`](course-assets/captures/ollama-0.32/): `chat-tools.json` and `stream-tools.ndjson` both report `"prompt_eval_count": 302`, with a `prompt_eval_duration` of 631280000 and 54412000 nanoseconds.
 
 Reuse stops at the first difference. Everything after a changed token must be processed again. Here is the effect on two letters that differ only in their date, once with the date at the top and once at the bottom. `sharedPrefix` counts how many characters two strings have in common from the start:
 
@@ -227,7 +227,7 @@ To find the files, walk up from `cwd`. Take at most one file per directory (AGEN
 
 The walk stops at the project boundary. That's the repository root (nearest `.git`), else `$HOME`, else `cwd`, so the walk never reaches `~/AGENTS.md` or `/tmp/AGENTS.md`, files that aren't this project's instructions. Add your personal `~/.config/agent-harness/AGENTS.md` first, as `source: 'user'`; the rest are `'project'`.
 
-Cap each file well under the window (~2k tokens): a 32 KiB file is ~8k tokens, the whole default window spent before you speak (the same "size it to the window" lesson as Day 25). With the default 8 KiB cap, a 50,000-byte `AGENTS.md` comes back as its first 8192 bytes and a marker, `...[truncated: showing 8192 of 50000 bytes. …]`, with `truncated: true`.
+Cap each file well under the window (~2k tokens): a 32 KiB file is ~8k tokens, the whole default window spent before you speak. A byte cap only means something measured against the window, and you'll meet the same rule again on Day 25, for old tool results, and on Day 28, for attached files. With the default 8 KiB cap, a 50,000-byte `AGENTS.md` comes back as its first 8192 bytes and a marker, `...[truncated: showing 8192 of 50000 bytes. …]`, with `truncated: true`.
 
 AGENTS.md is always in the prompt. Skills are the opposite: instructions that stay out of the prompt until they're needed.
 
