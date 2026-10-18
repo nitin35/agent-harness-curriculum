@@ -26,9 +26,9 @@ So today is half lab, half writing. You capture exactly what Ollama sends, you w
 
 ### 1. The wire is a provider's private dialect
 
-**"The wire" is what actually crosses the network.** When the harness talks to Ollama, it sends JSON over HTTP, and the field names in that JSON are Ollama's choice. Other servers make different choices for the same ideas: Day 21's OpenAI-compatible provider meets a second set. That JSON is the *wire format*, the provider's private dialect.
+"The wire" is what actually crosses the network. When the harness talks to Ollama, it sends JSON over HTTP, and the field names in that JSON are Ollama's choice. Other servers make different choices for the same ideas: Day 21's OpenAI-compatible provider meets a second set. That JSON is the *wire format*, the provider's private dialect.
 
-**Inside the harness, the vocabulary is fixed** ([message shapes](README.md#message-and-tool-shapes)):
+Inside the harness, the vocabulary is fixed ([message shapes](README.md#message-and-tool-shapes)):
 - roles are `system`, `user`, `assistant` and `tool_result`;
 - a tool call is `{ id, name, arguments }`, with `arguments` **always a plain object**;
 - reasoning lives in `thinking`.
@@ -58,7 +58,7 @@ To write the translator, you need to know the dialect exactly, so let's look at 
 
 ### 2. What Ollama actually sends
 
-**Start from a real capture.** This is the course's `chat-tools.json`, trimmed (the thinking text is long):
+Start from a real capture. This is the course's `chat-tools.json`, trimmed (the thinking text is long):
 
 ```json
 {
@@ -104,7 +104,7 @@ From the captures in [`course-assets/captures/ollama-0.32/`](course-assets/captu
 
 The streamed capture, `stream-tools.ndjson`, shows the parallel case: 43 lines, with the two calls on lines 40 and 41, each whole in its own chunk, and a final `done` line that carries neither.
 
-**The same conversation, on the wire.** Concept 1's three messages, as you'll send them back to Ollama in 7.3:
+Here is the same conversation on the wire: concept 1's three messages, as you'll send them back to Ollama in 7.3:
 
 ```json
 { "role": "user", "content": "What files are in /tmp?" }
@@ -124,7 +124,7 @@ The capture ends with two token counts, `prompt_eval_count` for the prompt and `
 
 Day 1 warned you about the context window. Today you measure it, so here is the idea in full.
 
-**A model reads a limited number of tokens.** A *token* is a piece of text, often part of a word. English averages roughly four characters per token. The *context window* is how many tokens the model can work with at once. The system prompt, the tool list, the whole conversation and the reply being written all share it.
+A model reads a limited number of tokens. A *token* is a piece of text, often part of a word. English averages roughly four characters per token. The *context window* is how many tokens the model can work with at once. The system prompt, the tool list, the whole conversation and the reply being written all share it.
 
 **Three numbers, and they're not the same:**
 - what the model *can* handle: `POST /api/show` reports it (`qwen35.context_length: 262144` for the course model);
@@ -141,7 +141,7 @@ The last piece of today is writing the vocabulary down, so that every module agr
 
 ### 4. JSDoc typedefs as the schema language
 
-**A schema written as types.** `src/shared/message-schemas.js` contains no code at all, only JSDoc `@typedef`s: the shapes that every other module agrees on. Python contrast: a typedef with `@property` lines is much like a `TypedDict`. C++ contrast: it's a plain struct declaration, checked by your editor rather than a compiler. Day 2 introduced `@typedef` and `@property`. A schema file needs three more pieces of the type language, shown here on a pizza order:
+The schema is written as types. `src/shared/message-schemas.js` contains no code at all, only JSDoc `@typedef`s: the shapes that every other module agrees on. Python contrast: a typedef with `@property` lines is much like a `TypedDict`. C++ contrast: it's a plain struct declaration, checked by your editor rather than a compiler. Day 2 introduced `@typedef` and `@property`. A schema file needs three more pieces of the type language, shown here on a pizza order:
 
 ```js
 // @ts-check
@@ -197,7 +197,7 @@ That's the same narrowing you saw in Day 6's `Shape` example. The check is real 
 
 `arguments` is an object, but nothing promises what's in it. `parseError` is optional, present only when the wire arguments couldn't be parsed at all. A union of string literals, such as the `Role` type `'system'|'user'|'assistant'|'tool_result'`, works exactly like `Size`.
 
-**Other files import the types, not values.** They write `/** @typedef {import('./message-schemas.js').AgentMessage} AgentMessage */`. That line exists only for the type checker: Node never loads anything for it. The file ends with `export {};` to say plainly that it is a module. Without any `import` or `export`, TypeScript can read a file as a plain script and turn every typedef into a global name, visible everywhere without an import.
+Other files import the types, not values. They write `/** @typedef {import('./message-schemas.js').AgentMessage} AgentMessage */`. That line exists only for the type checker: Node never loads anything for it. The file ends with `export {};` to say plainly that it is a module. Without any `import` or `export`, TypeScript can read a file as a plain script and turn every typedef into a global name, visible everywhere without an import.
 
 With `// @ts-check` at the top of a file, your editor holds objects to the shape:
 

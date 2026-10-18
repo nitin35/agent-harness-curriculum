@@ -34,7 +34,7 @@ The day ends with something you can run: a small state machine that checks wheth
 
 ### 1. Read the type surface first
 
-**Types are the map; function bodies are the terrain.** When you open an unfamiliar codebase, the temptation is to start reading functions from the top. Resist it. Start with what the package *offers* and what its data *looks like*. That means its entry file (often `index.ts` or `index.js`), which lists what it exports, and the types those exports use. Once you know the shapes, every function body is easier to read, because you already know what goes in and what comes out. When a package ships `.d.ts` files (type declarations), read those first. Pi ships TypeScript sources, so its `index.ts` plays that role.
+Types are the map; function bodies are the terrain. When you open an unfamiliar codebase, the temptation is to start reading functions from the top. Resist it. Start with what the package *offers* and what its data *looks like*. That means its entry file (often `index.ts` or `index.js`), which lists what it exports, and the types those exports use. Once you know the shapes, every function body is easier to read, because you already know what goes in and what comes out. When a package ships `.d.ts` files (type declarations), read those first. Pi ships TypeScript sources, so its `index.ts` plays that role.
 
 Pi's agent package starts like this:
 
@@ -50,7 +50,7 @@ export * from "./types.ts";
 
 `export * from` re-exports everything another file exports. So this file is a table of contents: the agent, the loop and the types are the three places to read.
 
-**You can already read most TypeScript.** TypeScript is JavaScript with type annotations, and the types use the same language as the JSDoc you wrote on Day 2. A few extra pieces of syntax cover nearly everything you'll meet in Pi. Here is the most important one, on a small example first:
+You can already read most TypeScript. TypeScript is JavaScript with type annotations, and the types use the same language as the JSDoc you wrote on Day 2. A few extra pieces of syntax cover nearly everything you'll meet in Pi. Here is the most important one, on a small example first:
 
 ```ts
 type Shape =
@@ -116,11 +116,11 @@ A big repository rewards a plan. You won't read all of Pi, and you don't need to
 
 ### 3. Vocabulary differences (know them before you read)
 
-**Pi and this course name events differently.** That's normal: every harness picks its own words for the same few moments. But it will trip you up if you don't expect it. Pi's `AgentEvent` includes `agent_start`/`agent_end`, `turn_start`/`turn_end`, `message_start`/`message_update`/`message_end` and `tool_execution_start`/`_update`/`_end`. A **different** union, in `packages/agent/src/harness/types.ts`, has hook events named `tool_call` and `tool_result`. Don't merge the two lists.
+Pi and this course name events differently. That's normal: every harness picks its own words for the same few moments. But it will trip you up if you don't expect it. Pi's `AgentEvent` includes `agent_start`/`agent_end`, `turn_start`/`turn_end`, `message_start`/`message_update`/`message_end` and `tool_execution_start`/`_update`/`_end`. A **different** union, in `packages/agent/src/harness/types.ts`, has hook events named `tool_call` and `tool_result`. Don't merge the two lists.
 
 Ours ([canonical events](README.md#canonical-event-list)) keeps `agent_start`/`agent_end` and `turn_start`/`turn_end`. It streams `text_delta` and `thinking_delta` instead of `message_update`, splits a tool into `tool_call_start` / `tool_call_end` / `tool_result`, and adds approval events.
 
-**The same run, in both vocabularies.** Here is a text-only answer. Pi also announces each whole message, including your prompt, with a start and an end. Ours streams the pieces and leaves your message to the UI:
+Here is the same run in both vocabularies, for a text-only answer. Pi also announces each whole message, including your prompt, with a start and an end. Ours streams the pieces and leaves your message to the UI:
 
 ```
 Pi (agent-loop.ts)                    ours (Day 12's loop)
@@ -165,7 +165,7 @@ leaf = e   →   the model sees a, b, c, e      (d stays in the file, on its own
 | **Asking before acting** | The core runs tools without asking. A `tool_call` hook (`beforeToolCall`) can block a call with a reason; that is how an extension would add a check. | An approval gate with permission rules in the core, **failing closed**: no approver means deny (Days 12, 20). | This course's learners run small local models on their own machines, so the safe default is built in, not bolted on. |
 | **MCP** | Left out deliberately (see Mario Zechner's post). | Added on Day 23. | MCP is now the standard way to plug tools into harnesses. Both choices are defensible: note where you stand. |
 
-**The first row is the deepest difference, so here it is in code.** Pi's `Agent` does, in effect, the first of these, and our bus does the second:
+The first row is the deepest difference, so here it is in code. Pi's `Agent` does, in effect, the first of these, and our bus does the second:
 
 ```js
 for (const listener of listeners) await listener(event);   // Pi: the next turn waits for every listener
@@ -290,7 +290,7 @@ stateDiagram-v2
   BetweenTurns --> Idle: agent_end
 ```
 
-**One run, step by step.** A question that needs one tool, then gets its answer, walks the machine like this:
+Here is one run, step by step. A question that needs one tool, then gets its answer, walks the machine like this:
 
 | Event | State after it |
 |---|---|
