@@ -19,9 +19,13 @@ Unknown option: --nope
 Usage: agent-harness [options] [prompt] …                   (exit 2)
 ```
 
+Four commands, four behaviours. The first is a script asking something that needs no tools, and it gets exactly `OK` on stdout. The second asks for a command that nobody is there to approve: the tool lines go to stderr, the call is denied, and the exit code is 4, so a script can tell that the answer didn't come from a command that ran. In the third, a cloned repository tries to switch `autoApprove` on through its own settings file, and the harness refuses it by name. The last is a typo, answered with the usage and exit code 2.
+
 Your harness is now a real command: layered settings, a log file, readable errors, a scriptable `-p` mode, and an installable package.
 
 ## Why it matters
+
+Previously, on Day 25, the harness reached Checkpoint 3, and Buffer 2 made sure everything under it holds. But you still start it as `node src/cli/main.js` from its own folder, configure it with environment variables (`AH_PROVIDER`, `AH_STREAM`, `AH_MCP_CONFIG`), and when something goes wrong, nothing has been written down.
 
 A harness other people can run needs:
 - configuration that composes (your defaults, a project's preferences, today's flags);
@@ -31,11 +35,13 @@ A harness other people can run needs:
 
 Each of these is also a security surface. A **repository's settings file** is written by whoever wrote the repository, and a naive settings loader lets it switch `autoApprove` on.
 
+Picture cloning a stranger's repository and starting the harness inside it, to ask about the code. If the loader merges every key in the project's file, that file can switch on `autoApprove`, point `ollamaUrl` at a server of its choosing, or add an MCP server, which runs a program. You'd see none of it, because loading settings prints nothing unless it's designed to.
+
 ## Concepts
 
 ### 1. Four layers, last wins, but the project layer is an allow-list
 
-**Settings come in layers, and each layer overrides the one before.** The code has defaults. Your own settings file changes some of them, a project's file changes a few more, and the flags you type change the rest for one run:
+Settings come in layers, and each layer overrides the one before. The code has defaults. Your own settings file changes some of them, a project's file changes a few more, and the flags you type change the rest for one run:
 
 ```
 built-in defaults                               the code
@@ -46,7 +52,7 @@ built-in defaults                               the code
 
 Here is a real run. Your file says `defaultModel: 'g-model'`, the project's says `'p-model'`, and you type `--model flag-model`. The result is `flag-model`: the last layer wins.
 
-**Who writes each layer is what matters.** Three layers come from you. The project file comes from whoever wrote the repository, and it arrives with every `git clone`. Git itself avoids this problem: a repository's own git settings live in `.git/config`, which a clone never copies. Your `.agent-harness/settings.json` is an ordinary file in the repository, so a stranger's settings land on your disk the moment you clone their code.
+Who writes each layer is what matters. Three layers come from you. The project file comes from whoever wrote the repository, and it arrives with every `git clone`. Git itself avoids this problem: a repository's own git settings live in `.git/config`, which a clone never copies. Your `.agent-harness/settings.json` is an ordinary file in the repository, so a stranger's settings land on your disk the moment you clone their code.
 
 **Global (yours): every known key.** Nested objects merge, arrays replace, and an unknown key gives a warning (forward-compatible), never a crash. If your file says `{ compaction: { keepMessages: 9 } }`, then `compaction.keepMessages` becomes 9 and `compaction.enabled` keeps its default, `true`. An array is a value of its own: `permissions: { allow: ['bash(git status)'] }` replaces the default `[]`, and doesn't add to it. A key the loader doesn't know is reported and skipped:
 
@@ -72,7 +78,7 @@ tools.enabled             // → ['read']                        intersection: '
 compaction.contextLimit   // → 8192                            lower: the project's 16384 is ignored
 ```
 
-**Everything else is ignored with a warning that names the key:** `autoApprove`, `ollamaUrl`, `openai.*`, `provider`, `permissions.allow`, `mcpServers`, `systemPrompt`. An allow-list beats a deny-list because new settings default to *not allowed*. A key added to the harness next month is refused in project files until someone decides it's safe there. With a deny-list, it would be accepted until someone remembers to block it. The warnings look like this (each is one line, wrapped here; the path is the project's real one):
+Everything else is ignored, with a warning that names the key: `autoApprove`, `ollamaUrl`, `openai.*`, `provider`, `permissions.allow`, `mcpServers`, `systemPrompt`. An allow-list beats a deny-list because new settings default to *not allowed*. A key added to the harness next month is refused in project files until someone decides it's safe there. With a deny-list, it would be accepted until someone remembers to block it. The warnings look like this (each is one line, wrapped here; the path is the project's real one):
 
 ```
 …/.agent-harness/settings.json: 'autoApprove' cannot be set by a project file (security) — ignored;
@@ -84,9 +90,9 @@ compaction.contextLimit   // → 8192                            lower: the proj
 
 Naming each key matters twice. An attack can't hide in silence, and you learn which legitimate preference to move into your own file.
 
-**Flags:** `--model`, `--provider`, `--system-prompt`, `--tools a,b`, `--no-tools`, `--permission-mode`, and `--auto-approve` (= `yolo`; deny rules still apply). `--tools read,bash` becomes `['read', 'bash']`, and `--no-tools` becomes `[]`.
+The flags are the last layer: `--model`, `--provider`, `--system-prompt`, `--tools a,b`, `--no-tools`, `--permission-mode`, and `--auto-approve` (= `yolo`; deny rules still apply). `--tools read,bash` becomes `['read', 'bash']`, and `--no-tools` becomes `[]`.
 
-**Skip three dangerous keys.** Also skip `__proto__`, `constructor` and `prototype` keys while merging. Repo JSON must not pollute your objects. `JSON.parse` turns `"__proto__"` into an ordinary key, and a naive merge then writes through it into `Object.prototype`, which every object in the process inherits from. *Run this in a file*, in a process of its own:
+One more rule applies while merging any layer: skip the keys `__proto__`, `constructor` and `prototype`, because repo JSON must not pollute your objects. `JSON.parse` turns `"__proto__"` into an ordinary key, and a naive merge then writes through it into `Object.prototype`, which every object in the process inherits from. *Run this in a file*, in a process of its own:
 
 ```js run
 const repo = JSON.parse('{"__proto__": {"polluted": true}}');
@@ -102,9 +108,13 @@ naiveMerge({}, repo);              // target['__proto__'] is Object.prototype it
 ({}).polluted                      // → true: every object now has it
 ```
 
+It's Day 9's `__proto__` trap from the other side. There, assigning a number to `counts['__proto__']` silently stored nothing. Here a merge that walks *into* `__proto__` finds `Object.prototype` and writes there, into the object every other object inherits from.
+
+Layers decide which value wins. The next question is which values are allowed at all.
+
 ### 2. The settings shape
 
-**Every key has a default, and the defaults are frozen.** These are the reference's `DEFAULT_SETTINGS`:
+Every key has a default, and the defaults are frozen. These are the reference's `DEFAULT_SETTINGS`:
 
 ```js
 {
@@ -142,7 +152,7 @@ DEFAULT_SETTINGS.permissions.allow.push('bash(*)');
 // TypeError: Cannot add property 0, object is not extensible
 ```
 
-**Validate types on load.** A bad value is a **user** error naming the key and the file, and exits 2:
+Types are validated on load. A bad value is a **user** error naming the key and the file, and exits 2:
 
 ```
 /home/me/.config/agent-harness/settings.json: 'contextWindow' must be an integer ≥ 1024 (got 10)
@@ -151,23 +161,40 @@ DEFAULT_SETTINGS.permissions.allow.push('bash(*)');
 
 A setting that's wrong in a file is wrong on every launch, so the harness refuses to start rather than guess. The message says which file to open and which key to fix.
 
+Settings tell the harness how to run. When it runs into trouble, the log is how you find out afterwards what it did.
+
 ### 3. Logs go to a file, never to stdout
 
-**Logs are for later.** When something went wrong an hour ago, the log is the only record of what the harness did. The reference writes `~/.config/agent-harness/logs/harness.log`, one line per event: `[2026-10-01T09:12:44.123Z] [info] [agent-loop] turn 2 finished`. The parts are the time, the level, and the module that wrote the line. Each module gets its own tagged logger from `logger.child('agent-loop')`, so `grep '\[cli\]'` finds one module's lines.
+Logs are for later. When something went wrong an hour ago, the log is the only record of what the harness did. The reference writes `~/.config/agent-harness/logs/harness.log`, one line per event: `[2026-10-01T09:12:44.123Z] [info] [agent-loop] turn 2 finished`. The parts are the time, the level, and the module that wrote the line. Each module gets its own tagged logger from `logger.child('agent-loop')`, so `grep '\[cli\]'` finds one module's lines.
 
 Levels filter what gets written: `debug` < `info` < `warn` < `error`. The default is `info`, and `--verbose` (`-V`) turns on `debug`.
 
-**Four rules make the file useful:**
+Four rules make the file useful:
 - **Flatten newlines** inside messages, or one log entry becomes several lines. The reference turns each newline into ` ⏎ `, so `'turn 2\nfinished'` is logged as `turn 2 ⏎ finished`, and a stack trace stays on one line.
 - **Rotate** at 1 MiB (rename to `.1` and keep one generation). Before each write, a file over the limit is renamed to `harness.log.1`, replacing the old one, and a new file starts.
 - **Writes are synchronous,** because the error handler logs right before the process ends and an async write scheduled there never happens. `fs.appendFile` only *schedules* the write for a later turn of the event loop, and a process that's exiting has no later turn. `fs.appendFileSync` finishes before it returns. (Day 11's exit hook had the same rule.)
 - **Never write to stdout:** in `-p` mode, stdout is the *answer* a script is parsing. In `agent-harness -p "…" > answer.txt`, a log line on stdout would end up in `answer.txt`.
 
+You can watch the third rule matter in an `'exit'` handler, where Day 11's hook runs (run this in a file):
+
+```js
+import fs from 'node:fs';
+process.on('exit', () => {
+  fs.appendFile('async.log', 'written by appendFile\n', () => {});
+  fs.appendFileSync('sync.log', 'written by appendFileSync\n');
+});
+console.log('exiting');
+```
+
+We ran it five times. Every time, `sync.log` held its line, and `async.log` existed but was empty: the file had been created, but the process ended before anything was written to it. The `'exit'` event runs its listeners and then the process stops, so a callback scheduled there has no later turn of the event loop to run in.
+
 Logging must also never crash the harness: the reference wraps each write in `try`, and a full disk costs you log lines, not the run.
+
+The log is for you, later. What the user sees *now*, when something fails, is the error message.
 
 ### 4. Errors in three voices
 
-**Who has to act decides how an error is shown.** A bad flag is yours to fix, a stopped server is yours to start, and a bug is the harness's own. Each gets a different message:
+Who has to act decides how an error is shown. A bad flag is yours to fix, a stopped server is yours to start, and a bug is the harness's own. Each gets a different message:
 
 | Category | Example | What the user sees |
 |---|---|---|
@@ -185,7 +212,7 @@ internal error: oops (details in /home/me/.config/agent-harness/logs/harness.log
 
 The middle line is the provider's own `ProviderError` (Day 8), which already names the URL.
 
-**One path for fatal errors.** `uncaughtException` and `unhandledRejection` route through the same handler, which logs, prints one line, and **restores the terminal** via one `shutdown()` path. Set `process.exitCode` instead of calling `process.exit()`, which can truncate stdout that's still buffered in a pipe.
+Fatal errors all take one path. `uncaughtException` and `unhandledRejection` route through the same handler, which logs, prints one line, and **restores the terminal** via one `shutdown()` path. Set `process.exitCode` instead of calling `process.exit()`, which can truncate stdout that's still buffered in a pipe.
 
 You can watch the truncation happen. On Linux and macOS, writes to a pipe are asynchronous, and `process.exit()` doesn't wait for them:
 
@@ -196,13 +223,15 @@ node -e "process.stdout.write('x'.repeat(1e6)); process.exitCode = 0" | wc -c # 
 
 With `exitCode`, Node exits by itself once nothing is left to do, and pending writes are part of "something to do".
 
-**Signals.** SIGTERM (`kill`, a process supervisor) and SIGHUP (a closed terminal) end Node *without* an `'exit'` event unless someone handles them, so the `bash` tool's exit hook (Day 11) never runs, and a running command outlives the harness. When `main.js` runs as the program, handle both: call `killAllCommands()`, then exit with 143 or 129.
+Signals need the same care. SIGTERM (`kill`, a process supervisor) and SIGHUP (a closed terminal) end Node *without* an `'exit'` event unless someone handles them, so the `bash` tool's exit hook (Day 11) never runs, and a running command outlives the harness. When `main.js` runs as the program, handle both: call `killAllCommands()`, then exit with 143 or 129.
 
 Those numbers follow the shell's convention: a process ended by signal N reports 128 + N. SIGHUP is 1, SIGINT (Ctrl+C) is 2 and SIGTERM is 15, so they give 129, 130 and 143. A Node process with an `'exit'` hook, killed with `kill -TERM`, reports 143 and never runs the hook. With a SIGTERM handler that calls `process.exit(143)`, the hook runs. Here `process.exit()` is right: the process has been told to stop, and the handler's job is to clean up on the way out.
 
+Errors decide how a run ends badly. How a run *starts* is the mode.
+
 ### 5. Modes
 
-**One command, five ways to start it:**
+There's one command, and five ways to start it:
 
 | Invocation | Mode |
 |---|---|
@@ -214,7 +243,7 @@ Those numbers follow the shell's convention: a process ended by signal N reports
 
 The first four map onto Day 19's `start({ resume })`: `'ask'`, `'last'`, `'pick'` and `'new'`. `'pick'` is new today: it shows Day 19's `/resume` picker at startup. `-p` is the one for scripts. It reads the prompt from its arguments, or from stdin when stdin isn't a terminal, and writes only the answer to stdout. Tool lines and warnings go to stderr, so `agent-harness -p "…" > answer.txt` captures exactly the answer.
 
-**Exit codes:** 0 ok · 1 runtime error · 2 usage or settings error · 3 no final answer (`maxTurns` ran out) · 4 answered, but tool calls were denied · 130 interrupted. Codes 3 and 4 matter for `-p`, where a script or CI job reads the result:
+The exit codes are 0 ok · 1 runtime error · 2 usage or settings error · 3 no final answer (`maxTurns` ran out) · 4 answered, but tool calls were denied · 130 interrupted. Codes 3 and 4 matter for `-p`, where a script or CI job reads the result:
 - **3:** the run stopped at `maxTurns`, so stdout holds no answer.
 - **4:** tool calls were refused: nobody could approve them, or one of your rules or your permission mode said no. The answer can't reflect what they would have done, and models *sometimes answer as if a denied command ran*: in 7 live runs of `-p "Use bash to run: echo hello"`, all denied, one printed `hello`. So `-p` says how many calls were denied on stderr and exits 4. To count them without parsing text, the loop marks a denied call in its tool log (`denied: true`, from the denial's `details`, which never reach the model). A refusal because nobody could answer also carries `unanswered: true`, so the warning can say which it was: `(nobody could approve)` or `(refused by your rules or mode)`.
 - **A prompt that needs no tools should say so with `--no-tools`.** Small models reach for a tool even when they don't need one: live, `-p "Say exactly: OK"` called `bash echo "OK"` in 2 of 3 runs, was denied, answered `OK`, and exited 4. With `--no-tools` it exited 0 every time. Exit 4 means *the model wanted a tool you didn't allow*: allow it, or rule tools out.
@@ -233,9 +262,11 @@ esac
 
 Python contrast: `subprocess.run([...]).returncode` gives the same number.
 
+The last step makes the command something other people can install.
+
 ### 6. Packaging
 
-**`package.json` turns the folder into a command and a library.** `package.json` gets:
+`package.json` turns the folder into a command and a library. It gets:
 - `"bin": { "agent-harness": "./src/cli/main.js" }` (the file starts with `#!/usr/bin/env node`);
 - `"exports": { ".": "./src/index.js" }`, `"files"` and `"engines": { "node": ">=22" }`.
 
@@ -249,7 +280,7 @@ Each field has one job:
 
 `npm link` puts `agent-harness` on your PATH. It creates a symbolic link from npm's global `bin` folder to your `src/cli/main.js`, and makes the file executable. Because it's a link, every edit to your code takes effect the next time you run the command.
 
-**The link changes how `main.js` knows it's the program.** `main.js` runs its CLI only when it's the program being executed, not when a test imports it. Python contrast: this is `if __name__ == '__main__':`. JavaScript has no such variable, so the reference compares its own URL with the path of the program Node started. Through `npm link`, that path is the link, not the file, so it must be resolved first:
+The link also changes how `main.js` knows it's the program. `main.js` runs its CLI only when it's the program being executed, not when a test imports it. Python contrast: this is `if __name__ == '__main__':`. JavaScript has no such variable, so the reference compares its own URL with the path of the program Node started. Through `npm link`, that path is the link, not the file, so it must be resolved first:
 
 ```js
 if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) { … }
@@ -275,6 +306,8 @@ Some hints:
 - **Keep `mcpServers` whole.** Its keys are your server names, not settings, so validate and copy it as one object.
 - **`'lower'` with no current value** takes the project's: a project may set `compaction.contextLimit` when yours is `null`.
 - **`saveGlobalSetting`** reads *your* file, sets one key, and writes it back. It never touches the project's file.
+
+Settings come first because most of `main` is built from them: the provider, the permission policy, compaction and the model all come from the merged result.
 
 ### 26.2 `src/config/logger.js` and `error-handler.js` — Core
 
@@ -315,6 +348,8 @@ Some hints:
 - **`--resume` needs a fourth start mode**, `'pick'`, which runs Day 19's `/resume` picker at startup.
 - **The tests run the real CLI** with `spawnSync`, with `AGENT_HARNESS_HOME` set to a temp folder (Day 17's `configDir` reads it), so your own settings are never touched.
 
+Returning an exit code instead of calling `process.exit()` is what makes `main` testable, and it's concept 4's rule as well: the code becomes `process.exitCode` at the very end, so stdout always drains first.
+
 ### 26.4 Packaging — Core
 
 `bin`, `exports`, `files`, `engines`; `src/index.js`. Then `npm link`, and `agent-harness --version` from any directory.
@@ -344,6 +379,12 @@ Commit `day-26: CLI, settings, logging, packaging`.
 `-p --output json` prints `{ response, turns, toolCalls, usage, aborted }` as one JSON line. That's what Day 29's eval runner would love to parse.
 
 ## Check
+
+The harness is now a command you can install and hand to someone else. Its settings come in four layers, and the one layer a stranger controls, the project's, can only set harmless preferences or tighten yours, with every refused key named. Logs go to a file, synchronously, and never to stdout. Errors speak in three voices, depending on who has to act, and every fatal path restores the terminal and lets stdout drain. And `-p` gives scripts one answer on stdout with an exit code they can trust, failing closed when nobody can approve a tool.
+
+Tomorrow, [Day 27](day-27.md) attacks all of it. It's red-team day: you assume the model has been turned against you by text it read, and check whether the harness's limits on what can run, where and with whose approval still hold.
+
+Before you move on, check:
 
 - [ ] `node --test tests/course/day26-*` green (15 tests)
 - [ ] `agent-harness -p "…"` works from any directory after `npm link`
@@ -386,14 +427,14 @@ The file isn't executable yet. `npm link` sets the bit for you; before that, run
 
 ## Common mistakes
 
-- A deny-list for the project layer. You'll forget the next dangerous key.
-- Calling `contextWindow` "harmless": it's memory on the user's machine.
-- `-p` exiting 0 after denying the very tool calls the prompt asked for.
-- Logging to stdout "for convenience".
-- `process.exit()` while stdout is still flushing.
-- An API key in a settings file, instead of the name of the variable that holds it.
-- Async log writes in an error handler, which never happen once the process exits.
-- Merging repository JSON without skipping `__proto__`, `constructor` and `prototype`.
+- A deny-list for the project layer. You'll forget the next dangerous key. A deny-list feels complete on the day you write it, because it covers every risky key you can think of then.
+- Calling `contextWindow` "harmless": it's memory on the user's machine. It looks like a model preference, but Ollama allocates it on your computer.
+- `-p` exiting 0 after denying the very tool calls the prompt asked for. The run did finish and did print an answer, so 0 looks right, until a script trusts that answer.
+- Logging to stdout "for convenience". It's where `console.log` goes, and in interactive use nobody notices the difference.
+- `process.exit()` while stdout is still flushing. It's the obvious way to end with a code, and in a terminal the output usually looks complete.
+- An API key in a settings file, instead of the name of the variable that holds it. The settings file is where configuration lives, so the key seems to belong there.
+- Async log writes in an error handler, which never happen once the process exits. `appendFile` is the usual choice everywhere else, and the lost line is exactly the one you'd need.
+- Merging repository JSON without skipping `__proto__`, `constructor` and `prototype`. `JSON.parse` returns an ordinary-looking object, so nothing hints that one of its keys is special.
 
 ## Self-check
 
